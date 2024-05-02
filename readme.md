@@ -1,115 +1,115 @@
-# koishi-plugin-random-source-selector
+# koishi-plugin-network-data-getter
 
-[![npm](https://img.shields.io/npm/v/koishi-plugin-random-source-selector?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-random-source-selector)
+[![npm](https://img.shields.io/npm/v/koishi-plugin-network-data-getter?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-network-data-getter)
 
-透过多行文本链接随机抽出一条作为图片或文案发送，支援自定义指令
+透過多行文字連結隨機抽出一條作為圖片或文案傳送，支援自定義指令
 
 
-## 功能介绍
+## 功能介紹
 
-目前支援的数据解析类型:
+目前支援的資料解析型別:
 
 - JSON
-- 多行文本
+- 多行文字
 - HTML
-- 资源
-- 源数据
+- 資源
+- 源資料
 
-目前支援的发送类型:
+目前支援的傳送型別:
 
-- 图片
-- 文本
+- 圖片
+- 文字
 - EJS模板
-- 视频
-- 音频
-- 文件
+- 影片
+- 音訊
+- 檔案
 
-目前支援透过指令传递参数:
+目前支援透過指令傳遞引數:
 
-- 以 `{0}` `{1}` `{2}` 传入...
+- 以 `{0}` `{1}` `{2}` 傳入...
 
-- 透过 `--data` 传入 payload
+- 透過 `--data` 傳入 payload
 
 ## 一般例子
 
-**假设你需要传输指令参数到你的链接**
+**假設你需要傳輸指令引數到你的連結**
 
-你可以使用 `{0}` `{1}` 等等的方式来传递参数, 例如:
+你可以使用 `{0}` `{1}` 等等的方式來傳遞引數, 例如:
 
 ```url
 https://google.com/search?q={0}
 ```
 
-当你的指令为 `google hello` 时，插件会将 `{0}` 替换为 `hello`，并发送到 `https://google.com/search?q=hello`。
+當你的指令為 `google hello` 時，外掛會將 `{0}` 替換為 `hello`，併傳送到 `https://google.com/search?q=hello`。
 
-另外也支援多个参数，例如:
+另外也支援多個引數，例如:
 
 ```url
 https://google.com/search?q={0}&safe={1}
 ```
 
-当你的指令为 `google hello true` 时，插件会将 `{0}` 替换为 `hello`，`{1}` 替换为 `true`，并发送到 `https://google.com/search?q=hello&safe=true`。
+當你的指令為 `google hello true` 時，外掛會將 `{0}` 替換為 `hello`，`{1}` 替換為 `true`，併傳送到 `https://google.com/search?q=hello&safe=true`。
 
 ---
 
-**假设你需要透过 payload 传输参数到你的链接**
+**假設你需要透過 payload 傳輸引數到你的連結**
 
-payload一般用在POST，PUT等请求，你可以在设定中添加 `request_data` 数据，例如:
+payload一般用在POST，PUT等請求，你可以在設定中新增 `request_data` 資料，例如:
 
 ```yml
 request_data: '{"name": "{0}", "age": "{1}"}'
 request_json: true
 ```
 
-__注意: 假设你的数据为JSON，则必须设定 `request_json` 为 `true`__
+__注意: 假設你的資料為JSON，則必須設定 `request_json` 為 `true`__
 
-此外，你也可以透过传入 `--data` 来覆盖设定中的参数，例如:
+此外，你也可以透過傳入 `--data` 來覆蓋設定中的引數，例如:
 
 ```sh
-创建用户 --data '{"name": "foo", "age": "bar"}'
+建立使用者 --data '{"name": "foo", "age": "bar"}'
 ```
 
-插件会将 `--data` 的数据覆盖 `request_data` 中的数据，然后提交请求。
+外掛會將 `--data` 的資料覆蓋 `request_data` 中的資料，然後提交請求。
 
 ---
 
-**假设你的链接返回多行文本**，例如
+**假設你的連結返回多行文字**，例如
 
 ```txt
-今天礼拜四，V我50
-今天是疯狂星期四！！
+今天禮拜四，V我50
+今天是瘋狂星期四！！
 ```
 
-则选择发送类型为`文本`, 数据返回类型为`多行文本`, 插件便会从这两句文案中随机抽选一个返回。
+則選擇傳送型別為`文字`, 資料返回型別為`多行文字`, 外掛便會從這兩句文案中隨機抽選一個返回。
 
 ---
 
-**假设你的链接返回多行图片链接**，例如
+**假設你的連結返回多行圖片連結**，例如
 
 ```txt
 https://cdn.xyz/abc.jpg
 https://cdn.xyz/xyz.jpg
 ```
 
-则选择发送类型为`图片`, 数据返回类型为`多行文本`, 插件便会从这两条图片链接随机抽选一张图片返回。
+則選擇傳送型別為`圖片`, 資料返回型別為`多行文字`, 外掛便會從這兩條圖片連結隨機抽選一張圖片返回。
 
 ---
 
-**假设你的链接返回随机图片**
+**假設你的連結返回隨機圖片**
 
-则选择发送类型为`图片`, 数据返回类型为`资源`, 插件则会直接把该链接返回的图片直接发送。
+則選擇傳送型別為`圖片`, 資料返回型別為`資源`, 外掛則會直接把該連結返回的圖片直接傳送。
 
-此类型适用于所有资源，包括视频，音频，文件等。
+此型別適用於所有資源，包括影片，音訊，檔案等。
 
-## 额外的解析类型选项 + 例子
+## 額外的解析型別選項 + 例子
 
 ### HTML
 
-透过 Jquery 提取文本，设置如下
+透過 Jquery 提取文字，設定如下
 
 ```yml
-jquery_selector: 提取元素, 相当于 querySelectorAll(value)
-attribute: 获取元素属性, 相当于 getAttribute(value)
+jquery_selector: 提取元素, 相當於 querySelectorAll(value)
+attribute: 獲取元素屬性, 相當於 getAttribute(value)
 ```
 
 例子如下:
@@ -121,23 +121,23 @@ attribute: 获取元素属性, 相当于 getAttribute(value)
 <img class="xyz" src="https://cdn.xyz/xyz.img">
 ```
 
-想获取仅限 class 中包含 `abc` 的图片链接，则可用:
+想獲取僅限 class 中包含 `abc` 的圖片連結，則可用:
 
 ```yml
 jquery_selector: .abc
 attribute: src
 ```
 
-插件则会从该三张图片中随机抽选。
+外掛則會從該三張圖片中隨機抽選。
 
-__注意: 提取的 html 文本为 http 请求的文本，不包含js后期注入的html元素__
+__注意: 提取的 html 文字為 http 請求的文字，不包含js後期注入的html元素__
 
 ### JSON
 
-透过字符进行JSON取值，设置如下
+透過字元進行JSON取值，設定如下
 
 ```yml
-json_key: 需要扫描的key, 相当于在js中获取json数值时的引用 + 支援迭代逻辑 []
+json_key: 需要掃描的key, 相當於在js中獲取json數值時的引用 + 支援迭代邏輯 []
 ```
 
 例子如下:
@@ -194,18 +194,18 @@ json_key: 需要扫描的key, 相当于在js中获取json数值时的引用 + �
 ]
 ```
 
-若想获取所有元素中内 action 的 type, 则使用
+若想獲取所有元素中內 action 的 type, 則使用
 
 ```yml
 json_key: "[].possible_answers[].action.type"
 ```
 
-`[]` 代表迭代，会提取每个迭代元素的值。
-提取后将会从 `hard`, `medium`, `easy`, `general`, `html-css` 中随机抽选。
+`[]` 代表迭代，會提取每個迭代元素的值。
+提取後將會從 `hard`, `medium`, `easy`, `general`, `html-css` 中隨機抽選。
 
 ---
 
-若 JSON 从 object 而非 array 开始，则直接填入该 object 的 key 即可，例如:
+若 JSON 從 object 而非 array 開始，則直接填入該 object 的 key 即可，例如:
 
 ```json
 {
@@ -215,21 +215,21 @@ json_key: "[].possible_answers[].action.type"
 }
 ```
 
-则填入:
+則填入:
 
 ```yml
 json_key: "abc.xyz"
 ```
 
-就可获得 `foo`, `bar` 的随机抽选。
+就可獲得 `foo`, `bar` 的隨機抽選。
 
-__注意: 若 `json_key` 填写不当有可能会导致插件报错。__
+__注意: 若 `json_key` 填寫不當有可能會導致外掛報錯。__
 
 ### EJS
 
-数据类型选择``元数据``，填入``EJS模板``即可。
+資料型別選擇``後設資料``，填入``EJS模板``即可。
 
-假设你的返回数据为以下的json:
+假設你的返回資料為以下的json:
 
 ```json
 {
@@ -240,15 +240,15 @@ __注意: 若 `json_key` 填写不当有可能会导致插件报错。__
 }
 ```
 
-EJS模板则可输入:
+EJS模板則可輸入:
 
 ```yml
 ejs_template: |-
-    <p> 成功创建 name: <%= data.name %>, job: <%= data.job %></p>
+    <p> 成功建立 name: <%= data.name %>, job: <%= data.job %></p>
     <p> id: <%= data.id %> </p>
 ```
 
-插件将会根据模板输出回应。
+外掛將會根據模板輸出迴應。
 
 
 
