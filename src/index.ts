@@ -3,11 +3,11 @@ import { Config, RandomSource, extractOptions } from './config'
 import axios, { AxiosResponse } from 'axios'
 import { parseSource } from './split'
 import { clearRecalls, sendSource } from './send'
-import { format } from './utils' 
+import { format } from './utils'
 import { logger } from './logger'
 
 export { Config } from './config'
-export const name = 'random-source-selector'
+export const name = 'network-data-getter'
 export const usage = `用法请详阅 readme.md`
 
 

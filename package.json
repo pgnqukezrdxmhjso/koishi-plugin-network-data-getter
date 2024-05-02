@@ -1,5 +1,5 @@
 {
-  "name": "koishi-plugin-random-source-selector",
+  "name": "koishi-plugin-network-data-getter",
   "description": "透过扫描API链接返回的数据随机抽出一条作为图片或文案发送，支援自定义指令",
   "version": "0.0.8-alpha.1",
   "main": "lib/index.js",
@@ -11,10 +11,10 @@
   "contributors": [
     "ericlam <tsukiko852@gmail.com>"
   ],
-  "homepage": "https://github.com/eric2788/koishi-plugin-random-source-selector",
+  "homepage": "https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eric2788/koishi-plugin-random-source-selector.git"
+    "url": "git+https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter.git"
   },
   "license": "MIT",
   "keywords": [
