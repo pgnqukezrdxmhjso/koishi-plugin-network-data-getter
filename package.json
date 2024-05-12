@@ -1,15 +1,22 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "透过扫描API链接返回的数据随机抽出一条作为图片或文案发送，支援自定义指令",
-  "version": "0.0.8-alpha.1",
+  "version": "0.0.8",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "scripts": {
+    "build": "cd ../../ && yarn build network-data-getter",
+    "pub": "cd ../../ && yarn pub network-data-getter",
+    "fastPub": "cd ../../ && yarn bump -3 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
+    "test": "node ./test/test.js"
+  },
   "files": [
     "lib",
     "dist"
   ],
   "contributors": [
-    "ericlam <tsukiko852@gmail.com>"
+    "ericlam <tsukiko852@gmail.com>",
+    "pgnqukezrdxmhjso"
   ],
   "homepage": "https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter",
   "repository": {
