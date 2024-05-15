@@ -11,11 +11,13 @@ export const usage = `用法請詳閲 <a target="_blank" href="https://github.co
 
 export function apply(ctx: Context, config: Config) {
   config.sources.forEach(source => {
-    ctx.command(`${source.command} [...args]`, '隨機抽出該鏈接中的一條作為圖片或文案發送', cmdConfig)
+    ctx.command(`${source.command} [...args]`, '', cmdConfig)
       .option('data', '-D [data:text] 請求數據')
       .alias(...source.alias)
       .action(({session, options}, ...args) =>
-        send(ctx, config, session, source, args, options.data)
+        send({
+          ctx, config, session, source, args, data: options.data
+        })
       )
   })
   ctx.on('dispose', () => clearRecalls())

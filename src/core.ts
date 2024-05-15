@@ -8,45 +8,81 @@ import {format} from "./utils";
 import {parseSource} from "./split";
 import {sendSource} from "./send";
 
-function handleReq({ctx, source, args = [], requestData}: {
+const httpsProxyAgentPool = {}
+const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
+  if (!httpsProxyAgentPool[proxyAgent]) {
+    httpsProxyAgentPool[proxyAgent] = new HttpsProxyAgent(proxyAgent);
+  }
+  return httpsProxyAgentPool[proxyAgent]
+}
+
+const handleProxyAgent = (parameter: AxiosRequestConfig, proxyAgent: string) => {
+  if (!proxyAgent) {
+    return;
+  }
+  parameter.httpsAgent = getHttpsProxyAgent(proxyAgent);
+}
+
+function handleReq({ctx, config, source, args = [], requestData}: {
   ctx: Context,
+  config: Config,
   source: RandomSource,
   args: string[],
   requestData: string
 }) {
   const parameter: AxiosRequestConfig = {
     timeout: ctx.http?.config?.timeout,
-    method: source.request_method,
-    url: format(source.source_url, ...args),
-    headers: source.request_headers,
-    data: source.request_json ? JSON.parse(requestData) : requestData
+    method: source.requestMethod,
+    url: format(source.sourceUrl, ...args),
+    headers: source.requestHeaders,
+    data: source.requestJson ? JSON.parse(requestData) : requestData
   };
 
-  if (ctx.http?.config?.['proxyAgent']) {
-    parameter.httpsAgent = new HttpsProxyAgent(ctx.http.config['proxyAgent']);
+  switch (config.proxyType) {
+    case "NONE": {
+      parameter.timeout = config.timeout;
+      break;
+    }
+    case "GLOBAL": {
+      parameter.timeout = ctx.http?.config?.timeout;
+      handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
+      break;
+    }
+    case "MANUAL": {
+      parameter.timeout = config.timeout;
+      handleProxyAgent(parameter, config.proxyAgent);
+      break;
+    }
   }
   return parameter;
 }
 
-export async function send(ctx: Context, config: Config, session: Session, source: RandomSource, args: string[] = [], data?: string) {
+export async function send({ctx, config, source, session, args = [], data}: {
+  ctx: Context,
+  config: Config,
+  source: RandomSource,
+  session: Session,
+  args: string[],
+  data?: string
+}) {
   try {
     const options = extractOptions(source)
     logger.debug('options: ', options)
     logger.debug('args: ', args)
     logger.debug('data: ', data)
-    if (config.getting_tips && source.getting_tips) {
+    if (config.gettingTips && source.gettingTips) {
       await session.send(`獲取 ${source.command} 中，請稍候...`)
     }
-    const requestData = data ?? source.request_data
+    const requestData = data ?? source.requestData
     const res: AxiosResponse = await axios(handleReq({
-      ctx, source, args, requestData
+      ctx, config, source, args, requestData
     }));
     if (res.status > 300 || res.status < 200) {
       const msg = JSON.stringify(res.data)
       throw new Error(`${msg} (${res.statusText})`)
     }
-    const elements = parseSource(res, source.data_type, options)
-    await sendSource(session, source.send_type, elements, source.recall, options)
+    const elements = parseSource(res, source.dataType, options)
+    await sendSource(session, source.sendType, elements, source.recall, options)
 
   } catch (err) {
     if (axios.isAxiosError(err)) {
