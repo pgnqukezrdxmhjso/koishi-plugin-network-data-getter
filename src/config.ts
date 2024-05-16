@@ -6,18 +6,24 @@ export type SplitType = 'json' | 'txt' | 'image' | 'html' | 'plain' | 'resource'
 export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 
+export interface SourceExpert {
+  requestHeaders: Dict<string, string>,
+  requestData: string,
+  requestJson: boolean,
+  proxyAgent?: string,
+}
+
 export interface RandomSource {
   command: string
   alias: string[]
   sourceUrl: string
   requestMethod: RequestMethod
-  requestHeaders: Dict<string, string>,
-  requestData: string,
-  requestJson: boolean,
   gettingTips: boolean,
+  recall?: number
+  expertMode: boolean,
+  expert?: SourceExpert,
   sendType: SendType
   dataType: SplitType
-  recall?: number
 
   jsonKey?: string
   jquerySelector?: string
@@ -35,9 +41,11 @@ const optionKeys: string[] = [
 export interface Config {
   gettingTips: boolean,
   expertMode: boolean,
-  proxyType: ProxyType,
-  proxyAgent?: string,
-  timeout?: number,
+  expert?: {
+    proxyType: ProxyType,
+    proxyAgent?: string,
+    timeout?: number,
+  },
   sources: RandomSource[]
 }
 
@@ -48,28 +56,35 @@ export const Config: Schema<Config> = Schema.intersect([
       gettingTips: Schema.boolean().description('獲取中提示, 關閉後全域性無提示').default(true),
       expertMode: Schema.boolean().description('專家模式').default(false),
     }).description('基礎設定'),
-    Schema.union([Schema.object({
-      expertMode: Schema.const(true).required(),
-      proxyType: Schema.union([
-        Schema.const('NONE').description('無'),
-        Schema.const('GLOBAL').description('全域性'),
-        Schema.const('MANUAL').description('自定義'),
-      ]).description('代理型別').role('radio').default('GLOBAL'),
-    }),]),
-    Schema.union([Schema.object({
-      proxyType: Schema.const('MANUAL').required(),
-      proxyAgent: Schema.string().description('地址').required(),
-    }), Schema.object({} as any)]),
     Schema.union([
       Schema.object({
-        proxyType: Schema.const('NONE').required(),
-        timeout: Schema.number().description('請求超時時間').default(30 * 1000),
+        expertMode: Schema.const(true).required(),
+        expert: Schema.intersect([
+          Schema.object({
+            proxyType: Schema.union([
+              Schema.const('NONE').description('無'),
+              Schema.const('GLOBAL').description('全域性'),
+              Schema.const('MANUAL').description('自定義'),
+            ]).description('代理型別').role('radio').default('GLOBAL'),
+          }),
+          Schema.union([Schema.object({
+            proxyType: Schema.const('MANUAL').required(),
+            proxyAgent: Schema.string().description('地址').required(),
+          }), Schema.object({} as any)]),
+          Schema.union([
+            Schema.object({
+              proxyType: Schema.const('NONE').required(),
+              timeout: Schema.number().description('請求超時時間').default(30 * 1000),
+            }),
+            Schema.object({
+              proxyType: Schema.const('MANUAL').required(),
+              timeout: Schema.number().description('請求超時時間').default(30 * 1000),
+            }),
+            Schema.object({} as any),
+          ]),
+        ])
       }),
-      Schema.object({
-        proxyType: Schema.const('MANUAL').required(),
-        timeout: Schema.number().description('請求超時時間').default(30 * 1000),
-      }),
-      Schema.object({} as any),
+      Schema.object({} as any)
     ]),
   ]),
   Schema.object({
@@ -79,11 +94,23 @@ export const Config: Schema<Config> = Schema.intersect([
         alias: Schema.array(Schema.string()).description('指令別名').default([]),
         sourceUrl: Schema.string().description('資料來源地址').required(),
         requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH']).description('請求方法').default('GET'),
-        requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
-        requestData: Schema.string().role('textarea').description('請求資料').default(''),
-        requestJson: Schema.boolean().description('請求資料是否為 JSON').default(false),
         gettingTips: Schema.boolean().description('獲取中提示').default(true),
         recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
+        expertMode: Schema.boolean().description('專家模式').default(false),
+      }),
+      Schema.union([
+        Schema.object({
+          expertMode: Schema.const(true).required(),
+          expert: Schema.object({
+            requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
+            requestData: Schema.string().role('textarea').description('請求資料').default(''),
+            requestJson: Schema.boolean().description('請求資料是否為 JSON').default(false),
+            proxyAgent: Schema.string().description('代理地址，本指令獨享'),
+          })
+        }),
+        Schema.object({} as any),
+      ]),
+      Schema.object({
         sendType: Schema.union([
           Schema.const('image').description('圖片'),
           Schema.const('text').description('文字'),
@@ -120,7 +147,7 @@ export const Config: Schema<Config> = Schema.intersect([
         }).description('傳送型別 - 額外配置'),
         Schema.object({} as any)
       ])
-    ])),
+    ]).description('---')),
   }).description('指令設定')
 ])
 
