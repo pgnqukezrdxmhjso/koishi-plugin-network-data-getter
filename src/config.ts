@@ -3,32 +3,35 @@ import {Dict, Schema} from 'koishi'
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 // 'image' is drepcated, use resource instead
 export type SplitType = 'json' | 'txt' | 'image' | 'html' | 'plain' | 'resource'
-export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH'
+export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH' | 'PURGE' | 'LINK' | 'UNLINK'
+export type RequestDataType = 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 
 export interface SourceExpert {
   requestHeaders: Dict<string, string>,
-  requestData: string,
-  requestJson: boolean,
+  requestDataType: RequestDataType,
+  requestData?: string,
+  requestFormFiles?: Dict<string, string>,
+  requestJson?: boolean,
   proxyAgent?: string,
 }
 
 export interface RandomSource {
-  command: string
-  alias: string[]
-  sourceUrl: string
-  requestMethod: RequestMethod
+  command: string,
+  alias: string[],
   gettingTips: boolean,
-  recall?: number
+  recall?: number,
+  sourceUrl: string,
+  requestMethod: RequestMethod,
   expertMode: boolean,
   expert?: SourceExpert,
-  sendType: SendType
-  dataType: SplitType
+  sendType: SendType,
+  dataType: SplitType,
 
-  jsonKey?: string
-  jquerySelector?: string
+  jsonKey?: string,
+  jquerySelector?: string,
   attribute?: string,
-  ejsTemplate?: string
+  ejsTemplate?: string,
 }
 
 const optionKeys: string[] = [
@@ -46,7 +49,7 @@ export interface Config {
     proxyAgent?: string,
     timeout?: number,
   },
-  sources: RandomSource[]
+  sources: RandomSource[],
 }
 
 
@@ -92,21 +95,41 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.object({
         command: Schema.string().description('指令名稱').required(),
         alias: Schema.array(Schema.string()).description('指令別名').default([]),
-        sourceUrl: Schema.string().description('資料來源地址').required(),
-        requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH']).description('請求方法').default('GET'),
         gettingTips: Schema.boolean().description('獲取中提示').default(true),
         recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
+        sourceUrl: Schema.string().description('請求地址').required(),
+        requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
         expertMode: Schema.boolean().description('專家模式').default(false),
       }),
       Schema.union([
         Schema.object({
           expertMode: Schema.const(true).required(),
-          expert: Schema.object({
-            requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
-            requestData: Schema.string().role('textarea').description('請求資料').default(''),
-            requestJson: Schema.boolean().description('請求資料是否為 JSON').default(false),
-            proxyAgent: Schema.string().description('代理地址，本指令獨享'),
-          })
+          expert: Schema.intersect([
+            Schema.object({
+              requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
+              requestDataType: Schema.union(['form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),
+            }),
+            Schema.union([
+              Schema.object({
+                requestDataType: Schema.const('form-data').required(),
+                requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
+                requestFormFiles: Schema.dict(Schema.path()).role('table').description('請求文件').default({}),
+              }),
+              Schema.object({
+                requestDataType: Schema.const('x-www-form-urlencoded').required(),
+                requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
+              }),
+              Schema.object({
+                requestDataType: Schema.const('raw'),
+                requestJson: Schema.boolean().description('請求資料是否為 JSON').default(false),
+                requestData: Schema.string().role('textarea').description('請求資料').default(''),
+              }),
+              Schema.object({} as any)
+            ]),
+            Schema.object({
+              proxyAgent: Schema.string().description('代理地址，本指令獨享'),
+            })
+          ])
         }),
         Schema.object({} as any),
       ]),
@@ -117,7 +140,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.const('ejs').description('EJS 模板'),
           Schema.const('audio').description('音訊'),
           Schema.const('video').description('影片'),
-          Schema.const('file').description('檔案')
+          Schema.const('file').description('文件')
         ]).description('傳送型別').default('text'),
         dataType: Schema.union([
           Schema.const('json').description('JSON'),

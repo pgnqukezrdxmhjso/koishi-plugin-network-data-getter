@@ -22,7 +22,7 @@
 - EJS模板
 - 影片
 - 音訊
-- 檔案
+- 文件
 
 目前支援透過指令傳遞引數:
 
@@ -40,7 +40,7 @@
 https://google.com/search?q={0}
 ```
 
-當你的指令為 `google hello` 時，外掛會將 `{0}` 替換為 `hello`，併傳送到 `https://google.com/search?q=hello`。
+當你的指令為 `google hello` 時，插件會將 `{0}` 替換為 `hello`，併傳送到 `https://google.com/search?q=hello`。
 
 另外也支援多個引數，例如:
 
@@ -48,7 +48,7 @@ https://google.com/search?q={0}
 https://google.com/search?q={0}&safe={1}
 ```
 
-當你的指令為 `google hello true` 時，外掛會將 `{0}` 替換為 `hello`，`{1}` 替換為 `true`，併傳送到 `https://google.com/search?q=hello&safe=true`。
+當你的指令為 `google hello true` 時，插件會將 `{0}` 替換為 `hello`，`{1}` 替換為 `true`，併傳送到 `https://google.com/search?q=hello&safe=true`。
 
 ---
 
@@ -69,7 +69,7 @@ __注意: 假設你的資料為JSON，則必須設定 `request_json` 為 `true`_
 建立使用者 --data '{"name": "foo", "age": "bar"}'
 ```
 
-外掛會將 `--data` 的資料覆蓋 `request_data` 中的資料，然後提交請求。
+插件會將 `--data` 的資料覆蓋 `request_data` 中的資料，然後提交請求。
 
 ---
 
@@ -80,7 +80,7 @@ __注意: 假設你的資料為JSON，則必須設定 `request_json` 為 `true`_
 今天是瘋狂星期四！！
 ```
 
-則選擇傳送型別為`文字`, 資料返回型別為`多行文字`, 外掛便會從這兩句文案中隨機抽選一個返回。
+則選擇傳送型別為`文字`, 資料返回型別為`多行文字`, 插件便會從這兩句文案中隨機抽選一個返回。
 
 ---
 
@@ -91,15 +91,15 @@ https://cdn.xyz/abc.jpg
 https://cdn.xyz/xyz.jpg
 ```
 
-則選擇傳送型別為`圖片`, 資料返回型別為`多行文字`, 外掛便會從這兩條圖片連結隨機抽選一張圖片返回。
+則選擇傳送型別為`圖片`, 資料返回型別為`多行文字`, 插件便會從這兩條圖片連結隨機抽選一張圖片返回。
 
 ---
 
 **假設你的連結返回隨機圖片**
 
-則選擇傳送型別為`圖片`, 資料返回型別為`資源`, 外掛則會直接把該連結返回的圖片直接傳送。
+則選擇傳送型別為`圖片`, 資料返回型別為`資源`, 插件則會直接把該連結返回的圖片直接傳送。
 
-此型別適用於所有資源，包括影片，音訊，檔案等。
+此型別適用於所有資源，包括影片，音訊，文件等。
 
 ## 額外的解析型別選項 + 例子
 
@@ -128,7 +128,7 @@ jquery_selector: .abc
 attribute: src
 ```
 
-外掛則會從該三張圖片中隨機抽選。
+插件則會從該三張圖片中隨機抽選。
 
 __注意: 提取的 html 文字為 http 請求的文字，不包含js後期注入的html元素__
 
@@ -223,7 +223,7 @@ json_key: "abc.xyz"
 
 就可獲得 `foo`, `bar` 的隨機抽選。
 
-__注意: 若 `json_key` 填寫不當有可能會導致外掛報錯。__
+__注意: 若 `json_key` 填寫不當有可能會導致插件報錯。__
 
 ### EJS
 
@@ -248,7 +248,7 @@ ejs_template: |-
     <p> id: <%= data.id %> </p>
 ```
 
-外掛將會根據模板輸出迴應。
+插件將會根據模板輸出迴應。
 
 
 

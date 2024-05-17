@@ -8,6 +8,8 @@ import Strings from "./utils/Strings";
 import {format} from "./utils";
 import {parseSource} from "./split";
 import {sendSource} from "./send";
+import fs from "node:fs";
+import path from "node:path";
 
 const httpsProxyAgentPool = {};
 const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
@@ -18,7 +20,7 @@ const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
 }
 
 const handleProxyAgent = (parameter: AxiosRequestConfig, proxyAgent: string): void => {
-  if (!proxyAgent) {
+  if (Strings.isBlank(proxyAgent)) {
     return;
   }
   if ((/^http:/).test(parameter.url)) {
@@ -36,7 +38,6 @@ function handleReq({ctx, config, source, args = [], data}: {
   data: string
 }) {
   const parameter: AxiosRequestConfig = {
-    timeout: ctx.http?.config?.timeout,
     method: source.requestMethod,
     url: format(source.sourceUrl, ...args),
   };
@@ -64,12 +65,46 @@ function handleReq({ctx, config, source, args = [], data}: {
   }
 
   if (source.expertMode && source.expert) {
-    if (Strings.isNotBlank(source.expert.proxyAgent)) {
-      handleProxyAgent(parameter, source.expert.proxyAgent);
+    let sExpert = source.expert;
+    if (Strings.isNotBlank(sExpert.proxyAgent)) {
+      handleProxyAgent(parameter, sExpert.proxyAgent);
     }
-    parameter.headers = source.expert.requestHeaders;
-    const requestData = data || source.expert.requestData;
-    parameter.data = source.expert.requestJson ? JSON.parse(requestData) : requestData;
+    parameter.headers = sExpert.requestHeaders || {};
+
+    switch (sExpert.requestDataType) {
+      case "raw": {
+        const requestData = data || sExpert.requestData;
+        if (Strings.isBlank(requestData)) {
+          break;
+        }
+        if (!parameter.headers['content-type']) {
+          parameter.headers['content-type'] = sExpert.requestJson ? 'application/json' : 'text/plain';
+        }
+        parameter.data = requestData;
+        break;
+      }
+      case "form-data": {
+        if (Strings.isBlank(sExpert.requestData)) {
+          break;
+        }
+        parameter.headers['content-type'] = 'multipart/form-data';
+        const formData = JSON.parse(sExpert.requestData);
+        for (let key in sExpert.requestFormFiles) {
+          const item = sExpert.requestFormFiles[key];
+          formData[key] = fs.createReadStream(path.join(ctx.baseDir, item));
+        }
+        parameter.data = formData;
+        break;
+      }
+      case "x-www-form-urlencoded": {
+        if (Strings.isBlank(sExpert.requestData)) {
+          break;
+        }
+        parameter.headers['content-type'] = 'application/x-www-form-urlencoded';
+        parameter.data = JSON.parse(sExpert.requestData);
+        break;
+      }
+    }
   }
 
   return parameter;
