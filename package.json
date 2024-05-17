@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "透过扫描API链接返回的数据随机抽出一条作为图片或文案发送，支援自定义指令",
-  "version": "0.0.12",
+  "version": "0.0.14",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {

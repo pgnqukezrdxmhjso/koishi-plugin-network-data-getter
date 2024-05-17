@@ -113,7 +113,7 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.object({
                 requestDataType: Schema.const('form-data').required(),
                 requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
-                requestFormFiles: Schema.dict(Schema.path()).role('table').description('請求文件').default({}),
+                requestFormFiles: Schema.dict(Schema.path()).description('請求文件').default({}),
               }),
               Schema.object({
                 requestDataType: Schema.const('x-www-form-urlencoded').required(),

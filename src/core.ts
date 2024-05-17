@@ -84,11 +84,11 @@ function handleReq({ctx, config, source, args = [], data}: {
         break;
       }
       case "form-data": {
-        if (Strings.isBlank(sExpert.requestData)) {
+        if (Strings.isBlank(sExpert.requestData) && Object.keys(sExpert.requestFormFiles).length < 1) {
           break;
         }
         parameter.headers['content-type'] = 'multipart/form-data';
-        const formData = JSON.parse(sExpert.requestData);
+        const formData = JSON.parse(sExpert.requestData || "{}");
         for (let key in sExpert.requestFormFiles) {
           const item = sExpert.requestFormFiles[key];
           formData[key] = fs.createReadStream(path.join(ctx.baseDir, item));
