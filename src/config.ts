@@ -4,7 +4,7 @@ export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 // 'image' is drepcated, use resource instead
 export type SplitType = 'json' | 'txt' | 'image' | 'html' | 'plain' | 'resource'
 export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH' | 'PURGE' | 'LINK' | 'UNLINK'
-export type RequestDataType = 'form-data' | 'x-www-form-urlencoded' | 'raw'
+export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 
 export interface SourceExpert {
@@ -52,6 +52,24 @@ export interface Config {
   sources: RandomSource[],
 }
 
+function unionOrObject(
+  key: string,
+  values: string[] | { value: string, required: boolean }[],
+  fn: () => Dict
+) {
+  const list = [];
+  values.forEach((value: any) => {
+    const obj = fn();
+    if (typeof value === 'string') {
+      obj[key] = Schema.const(value).required();
+    } else {
+      obj[key] = value.required ? Schema.const(value.value).required() : Schema.const(value.value);
+    }
+    list.push(Schema.object(obj));
+  });
+  return list;
+}
+
 
 export const Config: Schema<Config> = Schema.intersect([
   Schema.intersect([
@@ -75,14 +93,9 @@ export const Config: Schema<Config> = Schema.intersect([
             proxyAgent: Schema.string().description('地址').required(),
           }), Schema.object({} as any)]),
           Schema.union([
-            Schema.object({
-              proxyType: Schema.const('NONE').required(),
+            ...unionOrObject('proxyType', ['NONE', 'MANUAL'], () => ({
               timeout: Schema.number().description('請求超時時間').default(30 * 1000),
-            }),
-            Schema.object({
-              proxyType: Schema.const('MANUAL').required(),
-              timeout: Schema.number().description('請求超時時間').default(30 * 1000),
-            }),
+            })),
             Schema.object({} as any),
           ]),
         ])
@@ -97,7 +110,7 @@ export const Config: Schema<Config> = Schema.intersect([
         alias: Schema.array(Schema.string()).description('指令別名').default([]),
         gettingTips: Schema.boolean().description('獲取中提示').default(true),
         recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
-        sourceUrl: Schema.string().description('請求地址').required(),
+        sourceUrl: Schema.string().role('link').description('請求地址').required(),
         requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
         expertMode: Schema.boolean().description('專家模式').default(false),
       }),
@@ -107,7 +120,7 @@ export const Config: Schema<Config> = Schema.intersect([
           expert: Schema.intersect([
             Schema.object({
               requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
-              requestDataType: Schema.union(['form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),
+              requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),
             }),
             Schema.union([
               Schema.object({
@@ -121,7 +134,7 @@ export const Config: Schema<Config> = Schema.intersect([
               }),
               Schema.object({
                 requestDataType: Schema.const('raw'),
-                requestJson: Schema.boolean().description('請求資料是否為 JSON').default(false),
+                requestJson: Schema.boolean().description('請求資料是否為 JSON').default(true),
                 requestData: Schema.string().role('textarea').description('請求資料').default(''),
               }),
               Schema.object({} as any)
