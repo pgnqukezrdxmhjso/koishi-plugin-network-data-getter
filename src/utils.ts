@@ -37,12 +37,3 @@ function loopIter(target: any[], suffix: string[]): any[] {
 export function getRandom<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)]
 }
-
-
-export function format(str: string, ...args: any[]) {
-    return str.replaceAll(/{(\d+)}/g, function (match: string, number: string) {
-        return typeof args[number] != 'undefined'
-            ? args[number]
-            : ''
-    })
-}

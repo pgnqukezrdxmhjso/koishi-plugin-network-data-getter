@@ -1,15 +1,20 @@
-import axios, {AxiosResponse, AxiosRequestConfig} from "axios";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
+import {Argv, Context} from "koishi";
+import {Event} from '@satorijs/protocol';
+import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import {HttpsProxyAgent} from 'https-proxy-agent';
-import {Context, Session} from "koishi";
+import NodeHtmlParser from 'node-html-parser';
+
 
 import {Config, extractOptions, RandomSource} from "./config";
 import {logger} from "./logger";
 import Strings from "./utils/Strings";
-import {format} from "./utils";
 import {parseSource} from "./split";
 import {sendSource} from "./send";
-import fs from "node:fs";
-import path from "node:path";
+import Objects from "./utils/Objects";
 
 const httpsProxyAgentPool = {};
 const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
@@ -19,7 +24,7 @@ const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
   return httpsProxyAgentPool[proxyAgent];
 }
 
-const handleProxyAgent = (parameter: AxiosRequestConfig, proxyAgent: string): void => {
+function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string): void {
   if (Strings.isBlank(proxyAgent)) {
     return;
   }
@@ -30,109 +35,279 @@ const handleProxyAgent = (parameter: AxiosRequestConfig, proxyAgent: string): vo
   parameter.httpsAgent = getHttpsProxyAgent(proxyAgent);
 }
 
-function handleReq({ctx, config, source, args = [], data}: {
+function handleReqProxyAgent({ctx, config, parameter}: {
+  ctx: Context,
+  config: Config,
+  parameter: AxiosRequestConfig,
+}) {
+  const expert = config.expert;
+  if (!config.expertMode || !expert) {
+    parameter.timeout = ctx.http?.config?.timeout;
+    handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
+    return;
+  }
+
+  switch (expert.proxyType) {
+    case "NONE": {
+      parameter.timeout = expert.timeout;
+      break;
+    }
+    case "GLOBAL": {
+      parameter.timeout = ctx.http?.config?.timeout;
+      handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
+      break;
+    }
+    case "MANUAL": {
+      parameter.timeout = expert.timeout;
+      handleProxyAgent(parameter, expert.proxyAgent);
+      break;
+    }
+  }
+}
+
+type OptionInfo = {
+  value: boolean | string | number,
+  isFileUrl?: boolean,
+  autoOverwrite: boolean,
+  overwriteKey?: string
+}
+
+type OptionInfoMap = {
+  infoMap: Record<string, OptionInfo>,
+  map: Record<string, boolean | string | number>,
+  fnArg: string
+}
+
+function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv }): OptionInfoMap {
+  const map = {};
+  const infoMap = {};
+  const fnArgs = [];
+  const expert = source.expert;
+  if (source.expertMode && expert) {
+    expert.commandOptions?.forEach(option => {
+      const value = argv.options?.[option.name];
+      map[option.name] = value;
+      infoMap[option.name] = {
+        value,
+        autoOverwrite: option.autoOverwrite,
+        overwriteKey: option.overwriteKey,
+      };
+    });
+
+    expert.commandArgs?.forEach((arg, i) => {
+      const value = argv.args?.[i];
+      map[arg.name] = value;
+      infoMap[arg.name] = {
+        value,
+        autoOverwrite: arg.autoOverwrite,
+        overwriteKey: arg.overwriteKey,
+      };
+      map['$' + i] = value;
+      infoMap['$' + i] = infoMap[arg.name];
+    });
+  }
+
+  for (const key in infoMap) {
+    fnArgs.push(key);
+    const optionInfo = infoMap[key];
+    const value = optionInfo.value;
+    if (
+      typeof value !== 'string'
+      || !(/^<(img|audio|video|file)/).test(value)
+      || (/&lt;(img|audio|video|file)/).test(argv.source)
+    ) {
+      continue;
+    }
+    const htmlElement = NodeHtmlParser.parse(value).querySelector("img,audio,video,file");
+    const imgSrc = htmlElement.getAttribute('src');
+    if (Strings.isNotBlank(imgSrc)) {
+      map[key] = imgSrc;
+      optionInfo.value = imgSrc;
+      optionInfo.isFileUrl = true;
+    }
+  }
+  return {infoMap, map, fnArg: '{' + fnArgs.join(",") + '}'};
+}
+
+function formatOption({content, optionInfoMap, event}: {
+  content: string,
+  optionInfoMap: OptionInfoMap,
+  event: Event,
+}): string {
+  return content.replace(/{([^{}]+)}/g, function (match: string, p1: string) {
+    const value = new Function(optionInfoMap.fnArg, '$e', 'return ' + p1)(optionInfoMap.map, event);
+    return value ?? '';
+  });
+}
+
+function formatObjOption({obj, optionInfoMap, event, compelString}: {
+  obj: {},
+  optionInfoMap: OptionInfoMap,
+  event: Event,
+  compelString: boolean
+}) {
+  Objects.thoroughForEach(obj, (value, key, obj) => {
+    if (typeof value === 'string') {
+      obj[key] = formatOption({content: obj[key], optionInfoMap, event})
+    }
+  });
+
+  for (let name in optionInfoMap.infoMap) {
+    const optionInfo = optionInfoMap.infoMap[name];
+    const oKey = optionInfo.overwriteKey || name;
+    if (
+      !optionInfo.autoOverwrite
+      || typeof optionInfo.value === 'undefined'
+      || typeof obj[oKey] === 'undefined'
+    ) {
+      continue;
+    }
+    try {
+      eval(`obj.${oKey} = optionInfo.value` + (compelString ? '+""' : ''));
+    } catch (e) {
+    }
+  }
+}
+
+async function handleReqData({ctx, source, parameter, optionInfoMap, event, workData}: {
+  ctx: Context,
+  source: RandomSource,
+  parameter: AxiosRequestConfig,
+  optionInfoMap: OptionInfoMap,
+  event: Event,
+  workData: WorkData
+}) {
+  let expert = source.expert;
+  if (!source.expertMode || !expert) {
+    return;
+  }
+
+  if (Strings.isNotBlank(expert.proxyAgent)) {
+    handleProxyAgent(parameter, expert.proxyAgent);
+  }
+
+  parameter.headers = expert.requestHeaders || {};
+  formatObjOption({obj: parameter.headers, optionInfoMap, event, compelString: false});
+
+  switch (expert.requestDataType) {
+    case "raw": {
+      const requestData = expert.requestData;
+      if (Strings.isBlank(requestData)) {
+        break;
+      }
+      if (!parameter.headers['Content-Type'] && !expert.requestJson) {
+        parameter.headers['Content-Type'] = 'text/plain';
+      }
+      if (!expert.requestJson) {
+        parameter.data = requestData;
+      } else {
+        parameter.data = JSON.parse(requestData);
+        formatObjOption({obj: parameter.data, optionInfoMap, event, compelString: false});
+      }
+      break;
+    }
+    case "form-data": {
+      if (Strings.isBlank(expert.requestData) && Object.keys(expert.requestFormFiles).length < 1) {
+        break;
+      }
+      parameter.headers['Content-Type'] = 'multipart/form-data';
+      parameter.data = JSON.parse(expert.requestData || "{}");
+      formatObjOption({obj: parameter.data, optionInfoMap, event, compelString: true});
+
+      const fileOverwriteKeys = [];
+      for (let key in optionInfoMap.infoMap) {
+        const optionInfo = optionInfoMap.infoMap[key];
+        const oKey = optionInfo.overwriteKey || key;
+        if (
+          !optionInfo.autoOverwrite
+          || !optionInfo.isFileUrl
+          || Strings.isBlank(optionInfo.value + '')
+          || typeof expert.requestFormFiles[oKey] === 'undefined'
+        ) {
+          continue;
+        }
+        const fileRes = await axios({
+          url: optionInfo.value + '',
+        });
+        const tempFilePath = path.join(os.tmpdir(), crypto.createHash('md5').update(fileRes.data).digest('hex'));
+        await fs.promises.writeFile(tempFilePath, fileRes.data);
+        workData.tempFiles.push(tempFilePath);
+        parameter.data[oKey] = fs.createReadStream(tempFilePath);
+        fileOverwriteKeys.push(oKey);
+      }
+      for (let key in expert.requestFormFiles) {
+        if (fileOverwriteKeys.includes(key)) {
+          continue;
+        }
+        const item = expert.requestFormFiles[key];
+        parameter.data[key] = fs.createReadStream(path.join(ctx.baseDir, item));
+      }
+      break;
+    }
+    case "x-www-form-urlencoded": {
+      if (Strings.isBlank(expert.requestData)) {
+        break;
+      }
+      parameter.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      parameter.data = JSON.parse(expert.requestData);
+      formatObjOption({obj: parameter.data, optionInfoMap, event, compelString: true});
+      break;
+    }
+  }
+}
+
+async function handleReq({ctx, config, source, argv, workData,}: {
   ctx: Context,
   config: Config,
   source: RandomSource,
-  args: string[],
-  data: string
+  argv: Argv,
+  workData: WorkData,
 }) {
+  const optionInfoMap = handleOptionInfos({source, argv});
+
   const parameter: AxiosRequestConfig = {
+    url: formatOption({content: source.sourceUrl, optionInfoMap, event: argv.session?.event}),
     method: source.requestMethod,
-    url: format(source.sourceUrl, ...args),
   };
-
-  if (config.expertMode && config.expert) {
-    switch (config.expert.proxyType) {
-      case "NONE": {
-        parameter.timeout = config.expert.timeout;
-        break;
-      }
-      case "GLOBAL": {
-        parameter.timeout = ctx.http?.config?.timeout;
-        handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
-        break;
-      }
-      case "MANUAL": {
-        parameter.timeout = config.expert.timeout;
-        handleProxyAgent(parameter, config.expert.proxyAgent);
-        break;
-      }
-    }
-  } else {
-    parameter.timeout = ctx.http?.config?.timeout;
-    handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
-  }
-
-  if (source.expertMode && source.expert) {
-    let sExpert = source.expert;
-    if (Strings.isNotBlank(sExpert.proxyAgent)) {
-      handleProxyAgent(parameter, sExpert.proxyAgent);
-    }
-    parameter.headers = sExpert.requestHeaders || {};
-
-    switch (sExpert.requestDataType) {
-      case "raw": {
-        const requestData = data || sExpert.requestData;
-        if (Strings.isBlank(requestData)) {
-          break;
-        }
-        if (!parameter.headers['content-type']) {
-          parameter.headers['content-type'] = sExpert.requestJson ? 'application/json' : 'text/plain';
-        }
-        parameter.data = requestData;
-        break;
-      }
-      case "form-data": {
-        if (Strings.isBlank(sExpert.requestData) && Object.keys(sExpert.requestFormFiles).length < 1) {
-          break;
-        }
-        parameter.headers['content-type'] = 'multipart/form-data';
-        const formData = JSON.parse(sExpert.requestData || "{}");
-        for (let key in sExpert.requestFormFiles) {
-          const item = sExpert.requestFormFiles[key];
-          formData[key] = fs.createReadStream(path.join(ctx.baseDir, item));
-        }
-        parameter.data = formData;
-        break;
-      }
-      case "x-www-form-urlencoded": {
-        if (Strings.isBlank(sExpert.requestData)) {
-          break;
-        }
-        parameter.headers['content-type'] = 'application/x-www-form-urlencoded';
-        parameter.data = JSON.parse(sExpert.requestData);
-        break;
-      }
-    }
-  }
+  handleReqProxyAgent({ctx, config, parameter});
+  await handleReqData({ctx, source, parameter, optionInfoMap, event: argv.session?.event, workData});
 
   return parameter;
 }
 
-export async function send({ctx, config, source, session, args = [], data}: {
+type WorkData = {
+  tempFiles: string[];
+}
+
+export async function send({ctx, config, source, argv}: {
   ctx: Context,
   config: Config,
   source: RandomSource,
-  session: Session,
-  args: string[],
-  data?: string
+  argv: Argv,
 }) {
+  console.log(argv.args)
+  console.log(argv.options)
+  const session = argv.session;
+  if (config.gettingTips && source.gettingTips) {
+    await session.send(`獲取 ${source.command} 中，請稍候...`)
+  }
+
+  const workData: WorkData = {
+    tempFiles: []
+  }
+
   try {
-    const options = extractOptions(source)
-    logger.debug('options: ', options)
-    logger.debug('args: ', args)
-    logger.debug('data: ', data)
-    if (config.gettingTips && source.gettingTips) {
-      await session.send(`獲取 ${source.command} 中，請稍候...`)
-    }
-    const res: AxiosResponse = await axios(handleReq({
-      ctx, config, source, args, data
+    const res: AxiosResponse = await axios(await handleReq({
+      ctx, config, source, argv, workData
     }));
+
     if (res.status > 300 || res.status < 200) {
       const msg = JSON.stringify(res.data)
       throw new Error(`${msg} (${res.statusText})`)
     }
+
+    const options = extractOptions(source)
+    logger.debug('options: ', options)
     const elements = parseSource(res, source.dataType, options)
     await sendSource(session, source.sendType, elements, source.recall, options)
 
@@ -142,7 +317,12 @@ export async function send({ctx, config, source, session, args = [], data}: {
       await session.send(`發送失敗: ${err.message}`)
     } else {
       logger.error(err)
-      await session.send(`發送失敗: ${err?.message ?? err}`)
+      await session.send(`發送失敗: ${err?.message || err}`)
     }
+  } finally {
+    workData.tempFiles.forEach(file => {
+      fs.rm(file, () => {
+      });
+    });
   }
 }

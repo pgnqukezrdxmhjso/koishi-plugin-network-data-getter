@@ -47,5 +47,3 @@ export function parseSource(res: AxiosResponse, type: SplitType, options?: any):
   logger.debug(`${type} 的分隔结果: ${result}`)
   return result
 }
-
-

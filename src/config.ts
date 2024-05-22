@@ -7,7 +7,28 @@ export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE'
 export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 
+export interface CommandArg {
+  name: string,
+  desc?: string,
+  type: 'string' | 'number',
+  required: boolean,
+  autoOverwrite: boolean,
+  overwriteKey?: string
+}
+
+export interface CommandOption {
+  name: string,
+  acronym?: string,
+  desc?: string,
+  type: 'boolean' | 'string' | 'number',
+  value?: boolean | string | number,
+  autoOverwrite: boolean,
+  overwriteKey?: string
+}
+
 export interface SourceExpert {
+  commandArgs: CommandArg[],
+  commandOptions: CommandOption[],
   requestHeaders: Dict<string, string>,
   requestDataType: RequestDataType,
   requestData?: string,
@@ -19,6 +40,7 @@ export interface SourceExpert {
 export interface RandomSource {
   command: string,
   alias: string[],
+  desc: string,
   gettingTips: boolean,
   recall?: number,
   sourceUrl: string,
@@ -33,13 +55,6 @@ export interface RandomSource {
   attribute?: string,
   ejsTemplate?: string,
 }
-
-const optionKeys: string[] = [
-  'jsonKey',
-  'jquerySelector',
-  'attribute',
-  'ejsTemplate'
-]
 
 export interface Config {
   gettingTips: boolean,
@@ -108,10 +123,53 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.object({
         command: Schema.string().description('指令名稱').required(),
         alias: Schema.array(Schema.string()).description('指令別名').default([]),
+        desc: Schema.string().description('指令描述'),
         gettingTips: Schema.boolean().description('獲取中提示').default(true),
         recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
         sourceUrl: Schema.string().role('link').description('請求地址').required(),
         requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
+      }),
+      Schema.object({
+        dataType: Schema.union([
+          Schema.const('json').description('JSON'),
+          Schema.const('txt').description('多行文字'),
+          Schema.const('image').description('圖片').deprecated(),
+          Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
+          Schema.const('html').description('HTML 文字'),
+          Schema.const('plain').description('後設資料, 供EJS模板使用')
+        ]).description('資料返回型別').default('txt'),
+      }),
+      Schema.union([
+        Schema.object({
+          dataType: Schema.const('json').required(),
+          jsonKey: Schema.string().description('使用JS程式碼進行巢狀取值, 支援使用[]代表迭代元素')
+        }),
+        Schema.object({
+          dataType: Schema.const('html').required(),
+          jquerySelector: Schema.string().description('jQuery 選擇器').default('p'),
+          attribute: Schema.string().description('要提取的 HTML 元素屬性, 數值為空時獲取HTML元素內文字').default('')
+        }),
+        Schema.object({} as any)
+      ]),
+      Schema.object({
+        sendType: Schema.union([
+          Schema.const('image').description('圖片'),
+          Schema.const('text').description('文字'),
+          Schema.const('ejs').description('EJS 模板'),
+          Schema.const('audio').description('音訊'),
+          Schema.const('video').description('影片'),
+          Schema.const('file').description('文件')
+        ]).description('傳送型別').default('text'),
+      }),
+      Schema.union([
+        Schema.object({
+          sendType: Schema.const('ejs').required(),
+          ejsTemplate: Schema.string().role('textarea', {rows: [4, 10]}).description('EJS 模板').required(),
+        }),
+        Schema.object({} as any)
+      ]),
+
+      Schema.object({
         expertMode: Schema.boolean().description('專家模式').default(false),
       }),
       Schema.union([
@@ -119,6 +177,69 @@ export const Config: Schema<Config> = Schema.intersect([
           expertMode: Schema.const(true).required(),
           expert: Schema.intersect([
             Schema.object({
+              commandArgs: Schema.array(Schema.intersect([
+                Schema.object({
+                  name: Schema.string().description('名稱').required(),
+                  desc: Schema.string().description('描述'),
+                  type: Schema.union([
+                    Schema.const('string').description('字串'),
+                    Schema.const('number').description('數字'),
+                  ]).description('型別').default('string'),
+                  required: Schema.boolean().description('必填').default(false),
+                  autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
+                }),
+                Schema.union([
+                  Schema.object({
+                    autoOverwrite: Schema.const(true).required(),
+                    overwriteKey: Schema.string().description('變為覆寫指定的key')
+                  }),
+                  Schema.object({} as any)
+                ]),
+              ])).description('引數配置').collapse(),
+              commandOptions: Schema.array(Schema.intersect([
+                Schema.object({
+                  name: Schema.string().description('名稱').required(),
+                  acronym: Schema.string().description('縮寫').pattern(/^[a-zA-Z0-9]?$/),
+                  desc: Schema.string().description('描述'),
+                  type: Schema.union([
+                    Schema.const('boolean').description('布爾'),
+                    Schema.const('string').description('字串'),
+                    Schema.const('number').description('數字'),
+                  ]).description('型別').default('boolean'),
+                }),
+                Schema.union([
+                  Schema.object({
+                    type: Schema.const('boolean'),
+                    value: Schema.boolean().description('選項固有值'),
+                  }),
+                  Schema.object({
+                    type: Schema.const('string').required(),
+                    value: Schema.string().description('選項固有值'),
+                  }),
+                  Schema.object({
+                    type: Schema.const('number').required(),
+                    value: Schema.number().description('選項固有值'),
+                  }),
+                  Schema.object({} as any)
+                ]),
+                Schema.object({
+                  autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
+                }),
+                Schema.union([
+                  Schema.object({
+                    autoOverwrite: Schema.const(true).required(),
+                    overwriteKey: Schema.string().description('變為覆寫指定的key')
+                  }),
+                  Schema.object({} as any)
+                ]),
+              ])).description('選項配置').collapse(),
+              _prompt: Schema.never().description(
+                '請求頭與請求資料中可以使用  \n' +
+                '**{$數字}** 插入對應位置的引數  \n' +
+                '**{名稱}** 插入同名的引數或選項  \n' +
+                '**{$e.路徑}** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
+                '**{}** 中允許使用js程式碼 例如 `{JSON.stringify($e)}` `{$0 || $1}`'
+              ),
               requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
               requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),
             }),
@@ -146,47 +267,16 @@ export const Config: Schema<Config> = Schema.intersect([
         }),
         Schema.object({} as any),
       ]),
-      Schema.object({
-        sendType: Schema.union([
-          Schema.const('image').description('圖片'),
-          Schema.const('text').description('文字'),
-          Schema.const('ejs').description('EJS 模板'),
-          Schema.const('audio').description('音訊'),
-          Schema.const('video').description('影片'),
-          Schema.const('file').description('文件')
-        ]).description('傳送型別').default('text'),
-        dataType: Schema.union([
-          Schema.const('json').description('JSON'),
-          Schema.const('txt').description('多行文字'),
-          Schema.const('image').description('圖片').deprecated(),
-          Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
-          Schema.const('html').description('HTML 文字'),
-          Schema.const('plain').description('後設資料, 供EJS模板使用')
-        ]).description('資料返回型別').default('txt'),
-      }),
-      Schema.union([
-        Schema.object({
-          dataType: Schema.const('json').required(),
-          jsonKey: Schema.string().description('使用JS程式碼進行巢狀取值, 支援使用[]代表迭代元素')
-        }).description('資料返回型別 - 額外配置'),
-        Schema.object({
-          dataType: Schema.const('html').required(),
-          jquerySelector: Schema.string().description('jQuery 選擇器').default('p'),
-          attribute: Schema.string().description('要提取的 HTML 元素屬性, 數值為空時獲取HTML元素內文字').default('')
-        }).description('資料返回型別 - 額外配置'),
-        Schema.object({} as any)
-      ]),
-      Schema.union([
-        Schema.object({
-          sendType: Schema.const('ejs').required(),
-          ejsTemplate: Schema.string().role('textarea', {rows: [4, 10]}).description('EJS 模板').required(),
-        }).description('傳送型別 - 額外配置'),
-        Schema.object({} as any)
-      ])
-    ]).description('---')),
+    ]).description('--- \n ---')),
   }).description('指令設定')
 ])
 
+const optionKeys: string[] = [
+  'jsonKey',
+  'jquerySelector',
+  'attribute',
+  'ejsTemplate'
+]
 
 export function extractOptions(source: RandomSource): object {
   const options: any = {}
