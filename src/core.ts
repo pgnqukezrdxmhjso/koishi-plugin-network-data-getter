@@ -15,8 +15,29 @@ import Strings from "./utils/Strings";
 import {parseSource} from "./split";
 import {sendSource} from "./send";
 import Objects from "./utils/Objects";
+import Arrays from "./utils/Arrays";
+
+type OptionInfo = {
+  value: boolean | string | number,
+  isFileUrl?: boolean,
+  autoOverwrite: boolean,
+  overwriteKey?: string
+}
+
+type OptionInfoMap = {
+  infoMap: Record<string, OptionInfo>,
+  map: Record<string, boolean | string | number>,
+  fnArg: string
+}
+
+type WorkData = {
+  tempFiles: string[];
+}
 
 const httpsProxyAgentPool = {};
+const presetFnPool = {};
+let presetFnPoolArg: string;
+
 const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
   if (!httpsProxyAgentPool[proxyAgent]) {
     httpsProxyAgentPool[proxyAgent] = new HttpsProxyAgent(proxyAgent);
@@ -63,19 +84,6 @@ function handleReqProxyAgent({ctx, config, parameter}: {
       break;
     }
   }
-}
-
-type OptionInfo = {
-  value: boolean | string | number,
-  isFileUrl?: boolean,
-  autoOverwrite: boolean,
-  overwriteKey?: string
-}
-
-type OptionInfoMap = {
-  infoMap: Record<string, OptionInfo>,
-  map: Record<string, boolean | string | number>,
-  fnArg: string
 }
 
 function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv }): OptionInfoMap {
@@ -135,7 +143,7 @@ function formatOption({content, optionInfoMap, event}: {
   event: Event,
 }): string {
   return content.replace(/{([^{}]+)}/g, function (match: string, p1: string) {
-    const value = new Function(optionInfoMap.fnArg, '$e', 'return ' + p1)(optionInfoMap.map, event);
+    const value = new Function(optionInfoMap.fnArg, '$e', presetFnPoolArg, 'return ' + p1)(optionInfoMap.map, event, presetFnPool);
     return value ?? '';
   });
 }
@@ -269,14 +277,34 @@ async function handleReq({ctx, config, source, argv, workData,}: {
     url: formatOption({content: source.sourceUrl, optionInfoMap, event: argv.session?.event}),
     method: source.requestMethod,
   };
+  console.log(parameter.url)
   handleReqProxyAgent({ctx, config, parameter});
   await handleReqData({ctx, source, parameter, optionInfoMap, event: argv.session?.event, workData});
 
   return parameter;
 }
 
-type WorkData = {
-  tempFiles: string[];
+export function initPresetFns({config}: { config: Config }) {
+  if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
+    return;
+  }
+  config.expert.presetFns.forEach(presetFn => {
+    const fn = Function('{v}', presetFn.args || '__', presetFn.body);
+    presetFnPool[presetFn.name] = fn.bind(fn, {v: 114514});
+  });
+
+  presetFnPoolArg = '{' + (Object.keys(presetFnPool).join(',') || '_') + '}';
+  console.log(presetFnPoolArg)
+}
+
+export function onDispose() {
+  for (let k in httpsProxyAgentPool) {
+    delete httpsProxyAgentPool[k];
+  }
+  for (let k in presetFnPool) {
+    delete presetFnPool[k];
+  }
+  presetFnPoolArg = null;
 }
 
 export async function send({ctx, config, source, argv}: {
@@ -285,8 +313,6 @@ export async function send({ctx, config, source, argv}: {
   source: RandomSource,
   argv: Argv,
 }) {
-  console.log(argv.args)
-  console.log(argv.options)
   const session = argv.session;
   if (config.gettingTips && source.gettingTips) {
     await session.send(`獲取 ${source.command} 中，請稍候...`)
@@ -300,7 +326,6 @@ export async function send({ctx, config, source, argv}: {
     const res: AxiosResponse = await axios(await handleReq({
       ctx, config, source, argv, workData
     }));
-
     if (res.status > 300 || res.status < 200) {
       const msg = JSON.stringify(res.data)
       throw new Error(`${msg} (${res.statusText})`)

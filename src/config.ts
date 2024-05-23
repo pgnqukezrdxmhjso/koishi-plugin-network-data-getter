@@ -56,6 +56,12 @@ export interface RandomSource {
   ejsTemplate?: string,
 }
 
+export interface PresetFn {
+  name: string,
+  args: string,
+  body: string,
+}
+
 export interface Config {
   gettingTips: boolean,
   expertMode: boolean,
@@ -63,6 +69,7 @@ export interface Config {
     proxyType: ProxyType,
     proxyAgent?: string,
     timeout?: number,
+    presetFns: PresetFn[]
   },
   sources: RandomSource[],
 }
@@ -113,6 +120,13 @@ export const Config: Schema<Config> = Schema.intersect([
             })),
             Schema.object({} as any),
           ]),
+          Schema.object({
+            presetFns: Schema.array(Schema.object({
+              name:Schema.string().description('函式名').required(),
+              args:Schema.string().description('引數; 例如 a,b').required(),
+              body:Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
+            })).description('預設函式，可在後續配置中使用').collapse()
+          }),
         ])
       }),
       Schema.object({} as any)
@@ -238,7 +252,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 '**{$數字}** 插入對應位置的引數  \n' +
                 '**{名稱}** 插入同名的引數或選項  \n' +
                 '**{$e.路徑}** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
-                '**{}** 中允許使用js程式碼 例如 `{JSON.stringify($e)}` `{$0 || $1}`'
+                '**{}** 中允許使用js程式碼與預設函式 例如 `{JSON.stringify($e)}` `{$0 || $1}`'
               ),
               requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
               requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),

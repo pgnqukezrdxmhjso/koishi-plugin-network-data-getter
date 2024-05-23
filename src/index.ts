@@ -2,7 +2,7 @@ import {Command, Context, Argv} from 'koishi'
 import {Config} from './config'
 import {clearRecalls} from './send'
 import {logger} from './logger'
-import {send} from "./core";
+import {initPresetFns, onDispose, send} from "./core";
 import Strings from "./utils/Strings";
 
 export {Config} from './config'
@@ -11,6 +11,7 @@ export const usage = `用法請詳閲 <a target="_blank" href="https://github.co
 
 
 export function apply(ctx: Context, config: Config) {
+  initPresetFns({config});
   config.sources.forEach(source => {
     let def = source.command;
     source.expertMode && source.expert?.commandArgs?.forEach(arg => {
@@ -49,7 +50,10 @@ export function apply(ctx: Context, config: Config) {
     });
 
   })
-  ctx.on('dispose', () => clearRecalls())
+  ctx.on('dispose', () => {
+    onDispose();
+    clearRecalls();
+  })
 }
 
 
