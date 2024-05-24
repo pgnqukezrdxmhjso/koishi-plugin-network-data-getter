@@ -11,8 +11,8 @@
 
 - JSON
 - 多行文字
+- 資源 (圖片/影片/音訊等)
 - HTML
-- 資源
 - 源資料
 
 目前支援的傳送型別:
@@ -20,35 +20,35 @@
 - 圖片
 - 文字
 - EJS模板
-- 影片
 - 音訊
+- 影片
 - 文件
 
 目前支援透過指令傳遞引數:
 
-- 以 `{0}` `{1}` `{2}` 傳入...
+- 以 `<%=$0%>` `<%=$1%>` `<%=$2%>` 傳入...
 
-- 透過 `--data` 傳入 payload
+- 透過設定 引數配置 選項配置
 
 ## 一般例子
 
 **假設你需要傳輸指令引數到你的連結**
 
-你可以使用 `{0}` `{1}` 等等的方式來傳遞引數, 例如:
+你可以使用 `<%=$0%>` `<%=$1%>` 等等的方式來傳遞引數, 例如:
 
 ```url
-https://google.com/search?q={0}
+https://google.com/search?q=<%=$0%>
 ```
 
-當你的指令為 `google hello` 時，插件會將 `{0}` 替換為 `hello`，併傳送到 `https://google.com/search?q=hello`。
+當你的指令為 `google hello` 時，插件會將 `<%=$0%>` 替換為 `hello`，併傳送到 `https://google.com/search?q=hello`。
 
 另外也支援多個引數，例如:
 
 ```url
-https://google.com/search?q={0}&safe={1}
+https://google.com/search?q=<%=$0%>&safe=<%=$1%>
 ```
 
-當你的指令為 `google hello true` 時，插件會將 `{0}` 替換為 `hello`，`{1}` 替換為 `true`，併傳送到 `https://google.com/search?q=hello&safe=true`。
+當你的指令為 `google hello true` 時，插件會將 `<%=$0%>` 替換為 `hello`，`<%=$1%>` 替換為 `true`，併傳送到 `https://google.com/search?q=hello&safe=true`。
 
 ---
 
@@ -57,19 +57,11 @@ https://google.com/search?q={0}&safe={1}
 payload一般用在POST，PUT等請求，你可以在設定中新增 `request_data` 資料，例如:
 
 ```yml
-request_data: '{"name": "{0}", "age": "{1}"}'
+request_data: '{"name": "<%=$0%>", "age": "<%=$1%>"}'
 request_json: true
 ```
 
 __注意: 假設你的資料為JSON，則必須設定 `request_json` 為 `true`__
-
-此外，你也可以透過傳入 `--data` 來覆蓋設定中的引數，例如:
-
-```sh
-建立使用者 --data '{"name": "foo", "age": "bar"}'
-```
-
-插件會將 `--data` 的資料覆蓋 `request_data` 中的資料，然後提交請求。
 
 ---
 
@@ -249,7 +241,3 @@ ejs_template: |-
 ```
 
 插件將會根據模板輸出迴應。
-
-
-
-

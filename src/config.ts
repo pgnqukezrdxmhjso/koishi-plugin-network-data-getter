@@ -1,8 +1,7 @@
 import {Dict, Schema} from 'koishi'
 
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
-// 'image' is drepcated, use resource instead
-export type SplitType = 'json' | 'txt' | 'image' | 'html' | 'plain' | 'resource'
+export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
 export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH' | 'PURGE' | 'LINK' | 'UNLINK'
 export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
@@ -125,7 +124,7 @@ export const Config: Schema<Config> = Schema.intersect([
               name:Schema.string().description('函式名').required(),
               args:Schema.string().description('引數; 例如 a,b').required(),
               body:Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
-            })).description('預設函式，可在後續配置中使用').collapse()
+            })).description('預設函式，可在後續配置中使用  \n可使用node的 crypto').collapse()
           }),
         ])
       }),
@@ -147,7 +146,6 @@ export const Config: Schema<Config> = Schema.intersect([
         dataType: Schema.union([
           Schema.const('json').description('JSON'),
           Schema.const('txt').description('多行文字'),
-          Schema.const('image').description('圖片').deprecated(),
           Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
           Schema.const('html').description('HTML 文字'),
           Schema.const('plain').description('後設資料, 供EJS模板使用')
@@ -248,11 +246,11 @@ export const Config: Schema<Config> = Schema.intersect([
                 ]),
               ])).description('選項配置').collapse(),
               _prompt: Schema.never().description(
-                '請求頭與請求資料中可以使用  \n' +
-                '**{$數字}** 插入對應位置的引數  \n' +
-                '**{名稱}** 插入同名的引數或選項  \n' +
-                '**{$e.路徑}** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
-                '**{}** 中允許使用js程式碼與預設函式 例如 `{JSON.stringify($e)}` `{$0 || $1}`'
+                '請求地址、請求頭、請求資料 中可以使用  \n' +
+                '**<%=$數字%>** 插入對應位置的引數  \n' +
+                '**<%=名稱%>** 插入同名的引數或選項  \n' +
+                '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
+                '**<%= %>** 中允許使用js程式碼與預設函式 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`'
               ),
               requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
               requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),

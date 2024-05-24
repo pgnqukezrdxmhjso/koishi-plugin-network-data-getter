@@ -27,7 +27,6 @@ const splitMap: { [key in SplitType]: (data: any, options?: any) => string[] } =
   txt: (data: any) => {
     return (data as string).split('\n')
   },
-  image: (data: any) => [data],
   html: (data: any, options?: any) => {
     const {jquerySelector: selector, attribute} = options
     const root = parse(data)

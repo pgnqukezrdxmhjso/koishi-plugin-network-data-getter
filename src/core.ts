@@ -142,7 +142,7 @@ function formatOption({content, optionInfoMap, event}: {
   optionInfoMap: OptionInfoMap,
   event: Event,
 }): string {
-  return content.replace(/{([^{}]+)}/g, function (match: string, p1: string) {
+  return content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
     const value = new Function(optionInfoMap.fnArg, '$e', presetFnPoolArg, 'return ' + p1)(optionInfoMap.map, event, presetFnPool);
     return value ?? '';
   });
@@ -277,7 +277,6 @@ async function handleReq({ctx, config, source, argv, workData,}: {
     url: formatOption({content: source.sourceUrl, optionInfoMap, event: argv.session?.event}),
     method: source.requestMethod,
   };
-  console.log(parameter.url)
   handleReqProxyAgent({ctx, config, parameter});
   await handleReqData({ctx, source, parameter, optionInfoMap, event: argv.session?.event, workData});
 
@@ -289,12 +288,11 @@ export function initPresetFns({config}: { config: Config }) {
     return;
   }
   config.expert.presetFns.forEach(presetFn => {
-    const fn = Function('{v}', presetFn.args || '__', presetFn.body);
-    presetFnPool[presetFn.name] = fn.bind(fn, {v: 114514});
+    const fn = Function('{crypto}', presetFn.args || '__', presetFn.body);
+    presetFnPool[presetFn.name] = fn.bind(fn, {crypto});
   });
 
   presetFnPoolArg = '{' + (Object.keys(presetFnPool).join(',') || '_') + '}';
-  console.log(presetFnPoolArg)
 }
 
 export function onDispose() {
