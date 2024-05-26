@@ -9,7 +9,7 @@ import {HttpsProxyAgent} from 'https-proxy-agent';
 import NodeHtmlParser from 'node-html-parser';
 
 
-import {Config, extractOptions, PresetConstant, RandomSource} from "./config";
+import {Config, extractOptions, RandomSource} from "./config";
 import {logger} from "./logger";
 import Strings from "./utils/Strings";
 import {parseSource} from "./split";

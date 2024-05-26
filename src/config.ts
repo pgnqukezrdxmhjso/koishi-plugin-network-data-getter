@@ -103,7 +103,6 @@ function unionOrObject(
   return list;
 }
 
-console.log(__dirname)
 export const Config: Schema<Config> = Schema.intersect([
   Schema.intersect([
     Schema.object({
