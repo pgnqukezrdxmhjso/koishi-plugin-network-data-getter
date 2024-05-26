@@ -9,7 +9,7 @@ import {HttpsProxyAgent} from 'https-proxy-agent';
 import NodeHtmlParser from 'node-html-parser';
 
 
-import {Config, extractOptions, RandomSource} from "./config";
+import {Config, extractOptions, PresetConstant, RandomSource} from "./config";
 import {logger} from "./logger";
 import Strings from "./utils/Strings";
 import {parseSource} from "./split";
@@ -35,8 +35,12 @@ type WorkData = {
 }
 
 const httpsProxyAgentPool = {};
+
+const presetConstantPool = {};
+let presetConstantPoolFnArg: string;
+
 const presetFnPool = {};
-let presetFnPoolArg: string;
+let presetFnPoolFnArg: string;
 
 const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
   if (!httpsProxyAgentPool[proxyAgent]) {
@@ -142,10 +146,14 @@ function formatOption({content, optionInfoMap, event}: {
   optionInfoMap: OptionInfoMap,
   event: Event,
 }): string {
-  return content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-    const value = new Function(optionInfoMap.fnArg, '$e', presetFnPoolArg, 'return ' + p1)(optionInfoMap.map, event, presetFnPool);
-    return value ?? '';
-  });
+  return content
+    .replace(/\n/g, '\\n')
+    .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
+      const value = new Function(
+        '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + p1
+      )(event, presetConstantPool, presetFnPool, optionInfoMap.map,);
+      return value ?? '';
+    });
 }
 
 function formatObjOption({obj, optionInfoMap, event, compelString}: {
@@ -283,27 +291,6 @@ async function handleReq({ctx, config, source, argv, workData,}: {
   return parameter;
 }
 
-export function initPresetFns({config}: { config: Config }) {
-  if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
-    return;
-  }
-  config.expert.presetFns.forEach(presetFn => {
-    const fn = Function('{crypto}', presetFn.args || '__', presetFn.body);
-    presetFnPool[presetFn.name] = fn.bind(fn, {crypto});
-  });
-
-  presetFnPoolArg = '{' + (Object.keys(presetFnPool).join(',') || '_') + '}';
-}
-
-export function onDispose() {
-  for (let k in httpsProxyAgentPool) {
-    delete httpsProxyAgentPool[k];
-  }
-  for (let k in presetFnPool) {
-    delete presetFnPool[k];
-  }
-  presetFnPoolArg = null;
-}
 
 export async function send({ctx, config, source, argv}: {
   ctx: Context,
@@ -348,4 +335,68 @@ export async function send({ctx, config, source, argv}: {
       });
     });
   }
+}
+
+
+function initPresetConstants({ctx, config}: {
+  ctx: Context,
+  config: Config
+}) {
+  if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetConstants)) {
+    return;
+  }
+  config.expert.presetConstants.forEach(presetConstant => {
+    if (!presetConstant) {
+      return;
+    }
+    if (presetConstant.type !== 'file') {
+      presetConstantPool[presetConstant.name] = presetConstant.value;
+      return;
+    }
+    const filePath = path.join(ctx.baseDir, presetConstant.value + '');
+    Object.defineProperty(presetConstantPool, presetConstant.name, {
+      configurable: true,
+      enumerable: true,
+      get: () => fs.readFileSync(filePath),
+    })
+  });
+  presetConstantPoolFnArg = '{' + (Object.keys(presetConstantPool).join(',') || '_') + '}';
+}
+
+function initPresetFns({config}: { config: Config }) {
+  if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
+    return;
+  }
+  config.expert.presetFns.forEach(presetFn => {
+    if (!presetFn) {
+      return
+    }
+    const fn = Function('{crypto}', presetConstantPoolFnArg, presetFn.args || '__', presetFn.body);
+    presetFnPool[presetFn.name] = fn.bind(fn, {crypto}, presetConstantPool);
+  });
+  presetFnPoolFnArg = '{' + (Object.keys(presetFnPool).join(',') || '_') + '}';
+}
+
+export function initConfig({ctx, config}: {
+  ctx: Context,
+  config: Config
+}) {
+  initPresetConstants({ctx, config});
+  initPresetFns({config});
+}
+
+export function onDispose() {
+  for (let k in httpsProxyAgentPool) {
+    delete httpsProxyAgentPool[k];
+  }
+
+  for (let k in presetConstantPool) {
+    delete presetConstantPool[k];
+  }
+  presetConstantPoolFnArg = null;
+
+  for (let k in presetFnPool) {
+    delete presetFnPool[k];
+  }
+  presetFnPoolFnArg = null;
 }

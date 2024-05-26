@@ -1,4 +1,6 @@
 import {Dict, Schema} from 'koishi'
+import fs from "node:fs";
+import path from "node:path";
 
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
@@ -55,21 +57,31 @@ export interface RandomSource {
   ejsTemplate?: string,
 }
 
+
+export interface PresetConstant {
+  name: string,
+  type: 'boolean' | 'string' | 'number' | 'file',
+  value?: boolean | string | number,
+}
+
 export interface PresetFn {
   name: string,
   args: string,
   body: string,
 }
 
+export interface ConfigExpert {
+  proxyType: ProxyType,
+  proxyAgent?: string,
+  timeout?: number,
+  presetConstants: PresetConstant[]
+  presetFns: PresetFn[]
+}
+
 export interface Config {
   gettingTips: boolean,
   expertMode: boolean,
-  expert?: {
-    proxyType: ProxyType,
-    proxyAgent?: string,
-    timeout?: number,
-    presetFns: PresetFn[]
-  },
+  expert?: ConfigExpert,
   sources: RandomSource[],
 }
 
@@ -91,10 +103,13 @@ function unionOrObject(
   return list;
 }
 
-
+console.log(__dirname)
 export const Config: Schema<Config> = Schema.intersect([
   Schema.intersect([
     Schema.object({
+      _versionHistory: Schema.object({
+        _: Schema.never().description(fs.readFileSync(path.join(__dirname, './versionHistory.md')).toString())
+      }).description('更新歷史').collapse(),
       gettingTips: Schema.boolean().description('獲取中提示, 關閉後全域性無提示').default(true),
       expertMode: Schema.boolean().description('專家模式').default(false),
     }).description('基礎設定'),
@@ -109,10 +124,13 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.const('MANUAL').description('自定義'),
             ]).description('代理型別').role('radio').default('GLOBAL'),
           }),
-          Schema.union([Schema.object({
-            proxyType: Schema.const('MANUAL').required(),
-            proxyAgent: Schema.string().description('地址').required(),
-          }), Schema.object({} as any)]),
+          Schema.union([
+            Schema.object({
+              proxyType: Schema.const('MANUAL').required(),
+              proxyAgent: Schema.string().description('地址').required(),
+            }),
+            Schema.object({} as any)
+          ]),
           Schema.union([
             ...unionOrObject('proxyType', ['NONE', 'MANUAL'], () => ({
               timeout: Schema.number().description('請求超時時間').default(30 * 1000),
@@ -120,11 +138,41 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.object({} as any),
           ]),
           Schema.object({
+            presetConstants: Schema.array(Schema.intersect([
+              Schema.object({
+                name: Schema.string().description('常量名').required(),
+                type: Schema.union([
+                  Schema.const('boolean').description('布林'),
+                  Schema.const('string').description('字串'),
+                  Schema.const('number').description('數字'),
+                  Schema.const('file').description('檔案'),
+                ]).description('型別').default('string'),
+              }),
+              Schema.union([
+                Schema.object({
+                  type: Schema.const('boolean').required(),
+                  value: Schema.boolean().default(true),
+                }),
+                Schema.object({
+                  type: Schema.const('string'),
+                  value: Schema.string().required(),
+                }),
+                Schema.object({
+                  type: Schema.const('number').required(),
+                  value: Schema.number().required(),
+                }),
+                Schema.object({
+                  type: Schema.const('file').required(),
+                  value: Schema.path().description('讀取檔案作為字串使用').required(),
+                }),
+                Schema.object({} as any)
+              ])
+            ])).description('預設常量，可在後續預設函式、配置中使用').collapse(),
             presetFns: Schema.array(Schema.object({
-              name:Schema.string().description('函式名').required(),
-              args:Schema.string().description('引數; 例如 a,b').required(),
-              body:Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
-            })).description('預設函式，可在後續配置中使用  \n可使用node的 crypto').collapse()
+              name: Schema.string().description('函式名').required(),
+              args: Schema.string().description('引數; 例如 a,b'),
+              body: Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
+            })).description('預設函式，可在後續配置中使用  \n可使用node的 crypto').collapse(),
           }),
         ])
       }),
@@ -196,7 +244,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   type: Schema.union([
                     Schema.const('string').description('字串'),
                     Schema.const('number').description('數字'),
-                  ]).description('型別').default('string'),
+                  ]).description('型別  \n字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('string'),
                   required: Schema.boolean().description('必填').default(false),
                   autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
                 }),
@@ -217,7 +265,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('boolean').description('布爾'),
                     Schema.const('string').description('字串'),
                     Schema.const('number').description('數字'),
-                  ]).description('型別').default('boolean'),
+                  ]).description('型別  \n字串型別可解析出選項中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('boolean'),
                 }),
                 Schema.union([
                   Schema.object({
@@ -248,7 +296,7 @@ export const Config: Schema<Config> = Schema.intersect([
               _prompt: Schema.never().description(
                 '請求地址、請求頭、請求資料 中可以使用  \n' +
                 '**<%=$數字%>** 插入對應位置的引數  \n' +
-                '**<%=名稱%>** 插入同名的引數或選項  \n' +
+                '**<%=名稱%>** 插入同名的預設常量或引數或選項  \n' +
                 '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
                 '**<%= %>** 中允許使用js程式碼與預設函式 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`'
               ),

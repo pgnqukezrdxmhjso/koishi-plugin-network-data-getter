@@ -2,7 +2,7 @@ import {Command, Context, Argv} from 'koishi'
 import {Config} from './config'
 import {clearRecalls} from './send'
 import {logger} from './logger'
-import {initPresetFns, onDispose, send} from "./core";
+import {initConfig, onDispose, send} from "./core";
 import Strings from "./utils/Strings";
 
 export {Config} from './config'
@@ -11,7 +11,12 @@ export const usage = `用法請詳閲 <a target="_blank" href="https://github.co
 
 
 export function apply(ctx: Context, config: Config) {
-  initPresetFns({config});
+  initConfig({ctx, config});
+  ctx.on('dispose', () => {
+    onDispose();
+    clearRecalls();
+  });
+
   config.sources.forEach(source => {
     let def = source.command;
     source.expertMode && source.expert?.commandArgs?.forEach(arg => {
@@ -24,11 +29,12 @@ export function apply(ctx: Context, config: Config) {
         + (Strings.isNotBlank(arg.desc) ? ' ' + arg.desc : '');
     });
 
-    const command = ctx.command(def, source.desc, cmdConfig)
-      .alias(...source.alias)
-      .action((argv) =>
-        send({ctx, config, source, argv})
-      );
+    const command =
+      ctx.command(def, source.desc, cmdConfig)
+        .alias(...source.alias)
+        .action((argv) =>
+          send({ctx, config, source, argv})
+        );
 
     source.expertMode && source.expert?.commandOptions?.forEach(option => {
       const desc = [];
@@ -50,10 +56,7 @@ export function apply(ctx: Context, config: Config) {
     });
 
   })
-  ctx.on('dispose', () => {
-    onDispose();
-    clearRecalls();
-  })
+
 }
 
 
