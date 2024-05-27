@@ -4,9 +4,11 @@ import {clearRecalls} from './send'
 import {logger} from './logger'
 import {initConfig, onDispose, send} from "./core";
 import Strings from "./utils/Strings";
+import axios from "axios";
 
 export {Config} from './config'
 export const name = 'network-data-getter'
+// noinspection JSUnusedGlobalSymbols
 export const usage = `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>`
 
 
@@ -30,7 +32,7 @@ export function apply(ctx: Context, config: Config) {
     });
 
     const command =
-      ctx.command(def, source.desc, cmdConfig)
+      ctx.command(def, source.desc ?? '', cmdConfig)
         .alias(...source.alias)
         .action((argv) =>
           send({ctx, config, source, argv})
@@ -63,8 +65,12 @@ export function apply(ctx: Context, config: Config) {
 const cmdConfig: Command.Config = {
   checkUnknown: true,
   checkArgCount: true,
-  handleError: (err, {session, command}) => {
-    logger.error(err)
-    session.send(`執行指令 ${command.displayName} 時出現錯誤: ${err.message ?? err}`)
+  handleError: (err, {command}) => {
+    if (axios.isAxiosError(err)) {
+      logger.error(err.code, err.stack)
+    } else {
+      logger.error(err)
+    }
+    return `執行指令 ${command.displayName} 失敗`
   }
 }

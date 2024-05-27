@@ -42,7 +42,7 @@ export interface RandomSource {
   command: string,
   alias: string[],
   desc: string,
-  gettingTips: boolean,
+  reverseGettingTips?: boolean,
   recall?: number,
   sourceUrl: string,
   requestMethod: RequestMethod,
@@ -109,7 +109,7 @@ export const Config: Schema<Config> = Schema.intersect([
       _versionHistory: Schema.object({
         _: Schema.never().description(fs.readFileSync(path.join(__dirname, './versionHistory.md')).toString())
       }).description('更新歷史').collapse(),
-      gettingTips: Schema.boolean().description('獲取中提示, 關閉後全域性無提示').default(true),
+      gettingTips: Schema.boolean().description('獲取中提示').default(true),
       expertMode: Schema.boolean().description('專家模式').default(false),
     }).description('基礎設定'),
     Schema.union([
@@ -171,7 +171,12 @@ export const Config: Schema<Config> = Schema.intersect([
               name: Schema.string().description('函式名').required(),
               args: Schema.string().description('引數; 例如 a,b'),
               body: Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
-            })).description('預設函式，可在後續配置中使用  \n可使用node的 crypto').collapse(),
+            })).description(
+              '預設函式，可在後續配置中使用  \n' +
+              '可使用的模組: 變數名  \n' +
+              '[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n' +
+              '[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n'
+            ).collapse(),
           }),
         ])
       }),
@@ -184,7 +189,7 @@ export const Config: Schema<Config> = Schema.intersect([
         command: Schema.string().description('指令名稱').required(),
         alias: Schema.array(Schema.string()).description('指令別名').default([]),
         desc: Schema.string().description('指令描述'),
-        gettingTips: Schema.boolean().description('獲取中提示').default(true),
+        reverseGettingTips: Schema.boolean().description('對獲取中提示狀態取反').default(false),
         recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
         sourceUrl: Schema.string().role('link').description('請求地址').required(),
         requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
@@ -217,7 +222,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.const('ejs').description('EJS 模板'),
           Schema.const('audio').description('音訊'),
           Schema.const('video').description('影片'),
-          Schema.const('file').description('文件')
+          Schema.const('file').description('檔案')
         ]).description('傳送型別').default('text'),
       }),
       Schema.union([
@@ -261,7 +266,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   acronym: Schema.string().description('縮寫').pattern(/^[a-zA-Z0-9]?$/),
                   desc: Schema.string().description('描述'),
                   type: Schema.union([
-                    Schema.const('boolean').description('布爾'),
+                    Schema.const('boolean').description('布林'),
                     Schema.const('string').description('字串'),
                     Schema.const('number').description('數字'),
                   ]).description('型別  \n字串型別可解析出選項中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('boolean'),
@@ -300,20 +305,20 @@ export const Config: Schema<Config> = Schema.intersect([
                 '**<%= %>** 中允許使用js程式碼與預設函式 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`'
               ),
               requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
-              requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('raw'),
+              requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('empty'),
             }),
             Schema.union([
               Schema.object({
                 requestDataType: Schema.const('form-data').required(),
                 requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
-                requestFormFiles: Schema.dict(Schema.path()).description('請求文件').default({}),
+                requestFormFiles: Schema.dict(Schema.path()).description('請求檔案').default({}),
               }),
               Schema.object({
                 requestDataType: Schema.const('x-www-form-urlencoded').required(),
                 requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
               }),
               Schema.object({
-                requestDataType: Schema.const('raw'),
+                requestDataType: Schema.const('raw').required(),
                 requestJson: Schema.boolean().description('請求資料是否為 JSON').default(true),
                 requestData: Schema.string().role('textarea').description('請求資料').default(''),
               }),

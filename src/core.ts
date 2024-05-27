@@ -7,7 +7,7 @@ import {Event} from '@satorijs/protocol';
 import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import {HttpsProxyAgent} from 'https-proxy-agent';
 import NodeHtmlParser from 'node-html-parser';
-
+import * as OTPAuth from "otpauth";
 
 import {Config, extractOptions, RandomSource} from "./config";
 import {logger} from "./logger";
@@ -37,10 +37,10 @@ type WorkData = {
 const httpsProxyAgentPool = {};
 
 const presetConstantPool = {};
-let presetConstantPoolFnArg: string;
+let presetConstantPoolFnArg = '{}={}';
 
 const presetFnPool = {};
-let presetFnPoolFnArg: string;
+let presetFnPoolFnArg = '{}={}';
 
 const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
   if (!httpsProxyAgentPool[proxyAgent]) {
@@ -138,7 +138,7 @@ function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv })
       optionInfo.isFileUrl = true;
     }
   }
-  return {infoMap, map, fnArg: '{' + fnArgs.join(",") + '}'};
+  return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
 }
 
 function formatOption({content, optionInfoMap, event}: {
@@ -149,9 +149,12 @@ function formatOption({content, optionInfoMap, event}: {
   return content
     .replace(/\n/g, '\\n')
     .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-      const value = new Function(
-        '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + p1
-      )(event, presetConstantPool, presetFnPool, optionInfoMap.map,);
+      const value =
+        Function(
+          '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + p1
+        )(
+          event, presetConstantPool ?? {}, presetFnPool ?? {}, optionInfoMap.map ?? {}
+        );
       return value ?? '';
     });
 }
@@ -299,7 +302,7 @@ export async function send({ctx, config, source, argv}: {
   argv: Argv,
 }) {
   const session = argv.session;
-  if (config.gettingTips && source.gettingTips) {
+  if (config.gettingTips != source.reverseGettingTips) {
     await session.send(`獲取 ${source.command} 中，請稍候...`)
   }
 
@@ -321,14 +324,6 @@ export async function send({ctx, config, source, argv}: {
     const elements = parseSource(res, source.dataType, options)
     await sendSource(session, source.sendType, elements, source.recall, options)
 
-  } catch (err) {
-    if (axios.isAxiosError(err)) {
-      logger.error(err.code, err.stack)
-      await session.send(`發送失敗: ${err.message}`)
-    } else {
-      logger.error(err)
-      await session.send(`發送失敗: ${err?.message || err}`)
-    }
   } finally {
     workData.tempFiles.forEach(file => {
       fs.rm(file, () => {
@@ -360,7 +355,7 @@ function initPresetConstants({ctx, config}: {
       get: () => fs.readFileSync(filePath),
     })
   });
-  presetConstantPoolFnArg = '{' + (Object.keys(presetConstantPool).join(',') || '_') + '}';
+  presetConstantPoolFnArg = '{' + Object.keys(presetConstantPool).join(',') + '}={}';
 }
 
 function initPresetFns({config}: { config: Config }) {
@@ -371,10 +366,13 @@ function initPresetFns({config}: { config: Config }) {
     if (!presetFn) {
       return
     }
-    const fn = Function('{crypto}', presetConstantPoolFnArg, presetFn.args || '__', presetFn.body);
-    presetFnPool[presetFn.name] = fn.bind(fn, {crypto}, presetConstantPool);
+    const fn =
+      Function(
+        '{crypto,OTPAuth}', presetConstantPoolFnArg, presetFn.args, presetFn.body
+      );
+    presetFnPool[presetFn.name] = fn.bind(fn, {crypto, OTPAuth}, presetConstantPool ?? {});
   });
-  presetFnPoolFnArg = '{' + (Object.keys(presetFnPool).join(',') || '_') + '}';
+  presetFnPoolFnArg = '{' + Object.keys(presetFnPool).join(',') + '}={}';
 }
 
 export function initConfig({ctx, config}: {
@@ -393,10 +391,10 @@ export function onDispose() {
   for (let k in presetConstantPool) {
     delete presetConstantPool[k];
   }
-  presetConstantPoolFnArg = null;
+  presetConstantPoolFnArg = '{}={}';
 
   for (let k in presetFnPool) {
     delete presetFnPool[k];
   }
-  presetFnPoolFnArg = null;
+  presetFnPoolFnArg = '{}={}';
 }
