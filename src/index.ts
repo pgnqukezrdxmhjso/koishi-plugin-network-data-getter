@@ -21,13 +21,11 @@ export function apply(ctx: Context, config: Config) {
   });
 
   ctx.middleware(async (session, next) => {
+    let cmd: string;
     if (Strings.isNotEmpty(session.quote?.content)) {
-      await session.execute(session.content + ' ' + session.quote.content, next);
-      return;
-    }
-    let content = session.content.trim();
-    if (content.startsWith('<quote ')) {
-      const contentElement = NodeHtmlParser.parse(content, {voidTag: {closingSlash: true}});
+      cmd = session.content + ' ' + session.quote.content;
+    } else if (session.content.trim().startsWith('<quote ')) {
+      const contentElement = NodeHtmlParser.parse(session.content, {voidTag: {closingSlash: true}});
       contentElement.querySelectorAll('*')?.forEach(ele => {
         ele.insertAdjacentHTML('beforebegin', ' ');
         ele.insertAdjacentHTML('afterend', ' ');
@@ -39,7 +37,15 @@ export function apply(ctx: Context, config: Config) {
       }
       const quoteContent = quoteElement.innerHTML;
       contentElement.removeChild(quoteElement);
-      await session.execute((contentElement.innerHTML + ' ' + quoteContent).trim(), next);
+      cmd = contentElement.innerHTML + ' ' + quoteContent;
+    }
+    if (cmd) {
+      cmd = cmd.trim();
+      session.app.config.prefix?.forEach((p: string) => {
+        cmd = cmd.replace(new RegExp('^' + p), '');
+      })
+      await session.execute(cmd, next);
+
     }
     return next();
   }, true);
@@ -81,11 +87,8 @@ export function apply(ctx: Context, config: Config) {
       }
       command.option(option.name, desc.join(' '), config);
     });
-
   })
-
 }
-
 
 const cmdConfig: Command.Config = {
   checkUnknown: true,

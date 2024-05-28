@@ -11,6 +11,10 @@
 * 增加 `渲染模板系列` `Open Graph Protocol` `rss` 渲染型別
 * 渲染模板系列 `svg` `psd` `htmlCode` `htmlUrl`
 
+### 0.1.8
+
+* 修復解析回覆的bug
+
 ### 0.1.7
 
 * 解析回覆
