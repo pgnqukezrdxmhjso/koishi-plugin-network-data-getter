@@ -45,7 +45,7 @@ export function apply(ctx: Context, config: Config) {
         cmd = cmd.replace(new RegExp('^' + p), '');
       })
       await session.execute(cmd, next);
-
+      return;
     }
     return next();
   }, true);
