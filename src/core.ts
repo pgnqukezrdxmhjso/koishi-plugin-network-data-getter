@@ -301,28 +301,31 @@ export async function send({ctx, config, source, argv}: {
   source: RandomSource,
   argv: Argv,
 }) {
+  logger.debug('args: ', argv.args);
+  logger.debug('options: ', argv.options);
+
   const session = argv.session;
   if (config.gettingTips != source.reverseGettingTips) {
-    await session.send(`獲取 ${source.command} 中，請稍候...`)
+    await session.send(`獲取 ${source.command} 中，請稍候...`);
   }
 
   const workData: WorkData = {
     tempFiles: []
-  }
+  };
 
   try {
     const res: AxiosResponse = await axios(await handleReq({
       ctx, config, source, argv, workData
     }));
     if (res.status > 300 || res.status < 200) {
-      const msg = JSON.stringify(res.data)
-      throw new Error(`${msg} (${res.statusText})`)
+      const msg = JSON.stringify(res.data);
+      throw new Error(`${msg} (${res.statusText})`);
     }
 
-    const options = extractOptions(source)
-    logger.debug('options: ', options)
-    const elements = parseSource(res, source.dataType, options)
-    await sendSource(session, source.sendType, elements, source.recall, options)
+    const options = extractOptions(source);
+    logger.debug('options: ', options);
+    const elements = parseSource(res, source.dataType, options);
+    await sendSource(session, source.sendType, elements, source.recall, options);
 
   } finally {
     workData.tempFiles.forEach(file => {

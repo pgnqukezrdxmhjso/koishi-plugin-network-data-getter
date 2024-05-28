@@ -1,10 +1,11 @@
-import {Command, Context, Argv} from 'koishi'
+import {Argv, Command, Context} from 'koishi'
 import {Config} from './config'
 import {clearRecalls} from './send'
 import {logger} from './logger'
 import {initConfig, onDispose, send} from "./core";
 import Strings from "./utils/Strings";
 import axios from "axios";
+import NodeHtmlParser from "node-html-parser";
 
 export {Config} from './config'
 export const name = 'network-data-getter'
@@ -18,6 +19,30 @@ export function apply(ctx: Context, config: Config) {
     onDispose();
     clearRecalls();
   });
+
+  ctx.middleware(async (session, next) => {
+    if (Strings.isNotEmpty(session.quote?.content)) {
+      await session.execute(session.content + ' ' + session.quote.content, next);
+      return;
+    }
+    let content = session.content.trim();
+    if (content.startsWith('<quote ')) {
+      const contentElement = NodeHtmlParser.parse(content, {voidTag: {closingSlash: true}});
+      contentElement.querySelectorAll('*')?.forEach(ele => {
+        ele.insertAdjacentHTML('beforebegin', ' ');
+        ele.insertAdjacentHTML('afterend', ' ');
+      });
+      const quoteElement = contentElement.querySelector('quote');
+      const authorElement = quoteElement.querySelector('author');
+      if (authorElement !== null) {
+        quoteElement.removeChild(authorElement);
+      }
+      const quoteContent = quoteElement.innerHTML;
+      contentElement.removeChild(quoteElement);
+      await session.execute((contentElement.innerHTML + ' ' + quoteContent).trim(), next);
+    }
+    return next();
+  }, true);
 
   config.sources.forEach(source => {
     let def = source.command;
