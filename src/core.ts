@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import {Argv, Context} from "koishi";
+import {Argv, Context, Element} from "koishi";
 import {Event} from '@satorijs/protocol';
 import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import {HttpsProxyAgent} from 'https-proxy-agent';
@@ -49,7 +49,7 @@ const getHttpsProxyAgent = (proxyAgent: string): HttpsProxyAgent<string> => {
   return httpsProxyAgentPool[proxyAgent];
 }
 
-function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string): void {
+function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string) {
   if (Strings.isBlank(proxyAgent)) {
     return;
   }
@@ -58,6 +58,7 @@ function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string): vo
     return;
   }
   parameter.httpsAgent = getHttpsProxyAgent(proxyAgent);
+  return;
 }
 
 function handleReqProxyAgent({ctx, config, parameter}: {
@@ -130,6 +131,7 @@ function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv })
     ) {
       continue;
     }
+    Element.audio.name
     const htmlElement = NodeHtmlParser.parse(value).querySelector("img,audio,video,file");
     const imgSrc = htmlElement.getAttribute('src');
     if (Strings.isNotBlank(imgSrc)) {
@@ -188,8 +190,9 @@ function formatObjOption({obj, optionInfoMap, event, compelString}: {
   }
 }
 
-async function handleReqData({ctx, source, parameter, optionInfoMap, event, workData}: {
+async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, event, workData}: {
   ctx: Context,
+  config: Config,
   source: RandomSource,
   parameter: AxiosRequestConfig,
   optionInfoMap: OptionInfoMap,
@@ -245,9 +248,15 @@ async function handleReqData({ctx, source, parameter, optionInfoMap, event, work
         ) {
           continue;
         }
-        const fileRes = await axios({
+        const fileParameter: AxiosRequestConfig = {
           url: optionInfo.value + '',
-        });
+          responseType: "arraybuffer",
+        }
+        handleReqProxyAgent({ctx, config, parameter:fileParameter});
+        if (Strings.isNotBlank(expert.proxyAgent)) {
+          handleProxyAgent(fileParameter, expert.proxyAgent);
+        }
+        const fileRes = await axios(fileParameter);
         const tempFilePath = path.join(os.tmpdir(), crypto.createHash('md5').update(fileRes.data).digest('hex'));
         await fs.promises.writeFile(tempFilePath, fileRes.data);
         workData.tempFiles.push(tempFilePath);
@@ -289,7 +298,7 @@ async function handleReq({ctx, config, source, argv, workData,}: {
     method: source.requestMethod,
   };
   handleReqProxyAgent({ctx, config, parameter});
-  await handleReqData({ctx, source, parameter, optionInfoMap, event: argv.session?.event, workData});
+  await handleReqExpert({ctx, config, source, parameter, optionInfoMap, event: argv.session?.event, workData});
 
   return parameter;
 }

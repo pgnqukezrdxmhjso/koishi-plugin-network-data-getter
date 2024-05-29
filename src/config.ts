@@ -11,7 +11,7 @@ export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 export interface CommandArg {
   name: string,
   desc?: string,
-  type: 'string' | 'number',
+  type: 'string' | 'number' | 'user' | 'channel',
   required: boolean,
   autoOverwrite: boolean,
   overwriteKey?: string
@@ -21,7 +21,7 @@ export interface CommandOption {
   name: string,
   acronym?: string,
   desc?: string,
-  type: 'boolean' | 'string' | 'number',
+  type: 'boolean' | 'string' | 'number' | 'user' | 'channel',
   value?: boolean | string | number,
   autoOverwrite: boolean,
   overwriteKey?: string
@@ -248,6 +248,8 @@ export const Config: Schema<Config> = Schema.intersect([
                   type: Schema.union([
                     Schema.const('string').description('字串'),
                     Schema.const('number').description('數字'),
+                    Schema.const('user').description('用户'),
+                    Schema.const('channel').description('頻道'),
                   ]).description('型別  \n字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('string'),
                   required: Schema.boolean().description('必填').default(false),
                   autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
@@ -269,6 +271,8 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('boolean').description('布林'),
                     Schema.const('string').description('字串'),
                     Schema.const('number').description('數字'),
+                    Schema.const('user').description('用户'),
+                    Schema.const('channel').description('頻道'),
                   ]).description('型別  \n字串型別可解析出選項中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('boolean'),
                 }),
                 Schema.union([
@@ -299,7 +303,7 @@ export const Config: Schema<Config> = Schema.intersect([
               ])).description('選項配置').collapse(),
               _prompt: Schema.never().description(
                 '請求地址、請求頭、請求資料 中可以使用  \n' +
-                '**<%=$數字%>** 插入對應位置的引數  \n' +
+                '**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n' +
                 '**<%=名稱%>** 插入同名的預設常量或引數或選項  \n' +
                 '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
                 '**<%= %>** 中允許使用js程式碼與預設函式 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`'

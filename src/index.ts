@@ -1,11 +1,11 @@
-import {Argv, Command, Context} from 'koishi'
-import {Config} from './config'
-import {clearRecalls} from './send'
-import {logger} from './logger'
+import {Argv, Command, Context, Element} from 'koishi';
+import axios from "axios";
+import {Config} from './config';
+import {clearRecalls} from './send';
+import {logger} from './logger';
 import {initConfig, onDispose, send} from "./core";
 import Strings from "./utils/Strings";
-import axios from "axios";
-import NodeHtmlParser from "node-html-parser";
+import Arrays from "./utils/Arrays";
 
 export {Config} from './config'
 export const name = 'network-data-getter'
@@ -21,29 +21,28 @@ export function apply(ctx: Context, config: Config) {
   });
 
   ctx.middleware(async (session, next) => {
+    if (Arrays.isEmpty(config.sources)) {
+      return next();
+    }
     let cmd: string;
     if (Strings.isNotEmpty(session.quote?.content)) {
-      cmd = session.content + ' ' + session.quote.content;
+      const firstTextIndex = session.elements.findIndex(ele => ele.type === 'text');
+      cmd = session.elements.slice(firstTextIndex, session.elements.length).join(' ') + ' ' + session.quote.elements.join(' ');
     } else if (session.content.trim().startsWith('<quote ')) {
-      const contentElement = NodeHtmlParser.parse(session.content, {voidTag: {closingSlash: true}});
-      contentElement.querySelectorAll('*')?.forEach(ele => {
-        ele.insertAdjacentHTML('beforebegin', ' ');
-        ele.insertAdjacentHTML('afterend', ' ');
-      });
-      const quoteElement = contentElement.querySelector('quote');
-      const authorElement = quoteElement.querySelector('author');
-      if (authorElement !== null) {
-        quoteElement.removeChild(authorElement);
-      }
-      const quoteContent = quoteElement.innerHTML;
-      contentElement.removeChild(quoteElement);
-      cmd = contentElement.innerHTML + ' ' + quoteContent;
+      const elements = Element.parse(session.content);
+      const quoteElement = elements.shift();
+      elements.push(...quoteElement.children?.filter(ele => ele.type !== 'author'));
+      cmd = elements.join(' ');
     }
-    if (cmd) {
-      cmd = cmd.trim();
-      session.app.config.prefix?.forEach((p: string) => {
-        cmd = cmd.replace(new RegExp('^' + p), '');
-      })
+    if (!cmd) {
+      return next();
+    }
+    cmd = cmd.trim();
+    session.app.config.prefix?.forEach((p: string) => {
+      cmd = cmd.replace(new RegExp('^' + p), '');
+    })
+    const prefix = cmd.split(/\s/)[0];
+    if (config.sources.find(source => source.command === prefix || source.alias?.includes(prefix))) {
       await session.execute(cmd, next);
       return;
     }
@@ -73,13 +72,13 @@ export function apply(ctx: Context, config: Config) {
       const desc = [];
       const existValue = typeof option.value !== 'undefined';
       if (option.acronym) {
-        desc.push(`-${option.acronym}`)
+        desc.push(`-${option.acronym}`);
       }
       if (!existValue && option.type !== 'boolean') {
-        desc.push(`[${option.name}:${option.type}]`)
+        desc.push(`[${option.name}:${option.type}]`);
       }
       if (Strings.isNotBlank(option.desc)) {
-        desc.push(option.desc)
+        desc.push(option.desc);
       }
       const config: Argv.OptionConfig = {};
       if (existValue) {
@@ -95,10 +94,10 @@ const cmdConfig: Command.Config = {
   checkArgCount: true,
   handleError: (err, {command}) => {
     if (axios.isAxiosError(err)) {
-      logger.error(err.code, err.stack)
+      logger.error(err.code, err.stack);
     } else {
-      logger.error(err)
+      logger.error(err);
     }
-    return `執行指令 ${command.displayName} 失敗`
+    return `執行指令 ${command.displayName} 失敗`;
   }
 }
