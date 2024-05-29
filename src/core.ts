@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import {Argv, Context, Element} from "koishi";
+import {Argv, Context} from "koishi";
 import {Event} from '@satorijs/protocol';
 import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import {HttpsProxyAgent} from 'https-proxy-agent';
@@ -58,7 +58,6 @@ function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string) {
     return;
   }
   parameter.httpsAgent = getHttpsProxyAgent(proxyAgent);
-  return;
 }
 
 function handleReqProxyAgent({ctx, config, parameter}: {
@@ -131,7 +130,6 @@ function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv })
     ) {
       continue;
     }
-    Element.audio.name
     const htmlElement = NodeHtmlParser.parse(value).querySelector("img,audio,video,file");
     const imgSrc = htmlElement.getAttribute('src');
     if (Strings.isNotBlank(imgSrc)) {

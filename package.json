@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "透過掃描API連結返回的資料隨機抽出一條作為圖片或文案傳送，支援自定義指令",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
