@@ -39,7 +39,7 @@ export function apply(ctx: Context, config: Config) {
     }
     cmd = cmd.trim();
     session.app.config.prefix?.forEach((p: string) => {
-      cmd = cmd.replace(new RegExp('^' + p), '');
+      cmd = cmd.replace(new RegExp('^' + p), '').trim();
     })
     const prefix = cmd.split(/\s/)[0];
     if (config.sources.find(source => source.command === prefix || source.alias?.includes(prefix))) {
@@ -86,7 +86,8 @@ export function apply(ctx: Context, config: Config) {
       }
       command.option(option.name, desc.join(' '), config);
     });
-  })
+  });
+
 }
 
 const cmdConfig: Command.Config = {

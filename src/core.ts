@@ -2,14 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import {Argv, Context} from "koishi";
-import {Event} from '@satorijs/protocol';
+import {Argv, Context, Session} from "koishi";
 import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import {HttpsProxyAgent} from 'https-proxy-agent';
 import NodeHtmlParser from 'node-html-parser';
 import * as OTPAuth from "otpauth";
-
-import {Config, extractOptions, RandomSource} from "./config";
+import {Config, extractOptions, ProxyConfig, RandomSource} from "./config";
 import {logger} from "./logger";
 import Strings from "./utils/Strings";
 import {parseSource} from "./split";
@@ -19,6 +17,7 @@ import Arrays from "./utils/Arrays";
 
 type OptionInfo = {
   value: boolean | string | number,
+  fileName?: string,
   isFileUrl?: boolean,
   autoOverwrite: boolean,
   overwriteKey?: string
@@ -60,7 +59,30 @@ function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string) {
   parameter.httpsAgent = getHttpsProxyAgent(proxyAgent);
 }
 
-function handleReqProxyAgent({ctx, config, parameter}: {
+function handleProxyConfig({ctx, proxyConfig, parameter}: {
+  ctx: Context,
+  proxyConfig: ProxyConfig,
+  parameter: AxiosRequestConfig,
+}) {
+  switch (proxyConfig.proxyType) {
+    case "NONE": {
+      parameter.timeout = proxyConfig.timeout;
+      break;
+    }
+    case "GLOBAL": {
+      parameter.timeout = ctx.http?.config?.timeout;
+      handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
+      break;
+    }
+    case "MANUAL": {
+      parameter.timeout = proxyConfig.timeout;
+      handleProxyAgent(parameter, proxyConfig.proxyAgent);
+      break;
+    }
+  }
+}
+
+function handleReqConfigProxyConfig({ctx, config, parameter}: {
   ctx: Context,
   config: Config,
   parameter: AxiosRequestConfig,
@@ -71,28 +93,29 @@ function handleReqProxyAgent({ctx, config, parameter}: {
     handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
     return;
   }
+  handleProxyConfig({ctx, proxyConfig: expert, parameter});
+}
 
-  switch (expert.proxyType) {
-    case "NONE": {
-      parameter.timeout = expert.timeout;
-      break;
-    }
-    case "GLOBAL": {
-      parameter.timeout = ctx.http?.config?.timeout;
-      handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
-      break;
-    }
-    case "MANUAL": {
-      parameter.timeout = expert.timeout;
-      handleProxyAgent(parameter, expert.proxyAgent);
-      break;
-    }
+function handleReqPlatformProxyConfig({ctx, config, session, parameter}: {
+  ctx: Context,
+  config: Config,
+  session: Session,
+  parameter: AxiosRequestConfig,
+}) {
+  if (!config.expertMode) {
+    return;
   }
+  const platformResourceProxy = config.expert?.platformResourceProxyList
+    ?.find(platformResourceProxy => platformResourceProxy.name === session.platform);
+  if (!platformResourceProxy) {
+    return;
+  }
+  handleProxyConfig({ctx, proxyConfig: platformResourceProxy, parameter})
 }
 
 function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv }): OptionInfoMap {
   const map = {};
-  const infoMap = {};
+  const infoMap: Record<string, OptionInfo> = {};
   const fnArgs = [];
   const expert = source.expert;
   if (source.expertMode && expert) {
@@ -125,7 +148,7 @@ function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv })
     const value = optionInfo.value;
     if (
       typeof value !== 'string'
-      || !(/^<(img|audio|video|file)/).test(value)
+      || !(/^<(img|audio|video|file)/).test(value.trim())
       || (/&lt;(img|audio|video|file)/).test(argv.source)
     ) {
       continue;
@@ -136,15 +159,16 @@ function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv })
       map[key] = imgSrc;
       optionInfo.value = imgSrc;
       optionInfo.isFileUrl = true;
+      optionInfo.fileName = htmlElement.getAttribute('file');
     }
   }
   return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
 }
 
-function formatOption({content, optionInfoMap, event}: {
+function formatOption({content, optionInfoMap, session}: {
   content: string,
   optionInfoMap: OptionInfoMap,
-  event: Event,
+  session: Session,
 }): string {
   return content
     .replace(/\n/g, '\\n')
@@ -153,21 +177,21 @@ function formatOption({content, optionInfoMap, event}: {
         Function(
           '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + p1
         )(
-          event, presetConstantPool ?? {}, presetFnPool ?? {}, optionInfoMap.map ?? {}
+          session.event, presetConstantPool ?? {}, presetFnPool ?? {}, optionInfoMap.map ?? {}
         );
       return value ?? '';
     });
 }
 
-function formatObjOption({obj, optionInfoMap, event, compelString}: {
+function formatObjOption({obj, optionInfoMap, session, compelString}: {
   obj: {},
   optionInfoMap: OptionInfoMap,
-  event: Event,
+  session: Session,
   compelString: boolean
 }) {
   Objects.thoroughForEach(obj, (value, key, obj) => {
     if (typeof value === 'string') {
-      obj[key] = formatOption({content: obj[key], optionInfoMap, event})
+      obj[key] = formatOption({content: obj[key], optionInfoMap, session})
     }
   });
 
@@ -188,13 +212,13 @@ function formatObjOption({obj, optionInfoMap, event, compelString}: {
   }
 }
 
-async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, event, workData}: {
+async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, session, workData}: {
   ctx: Context,
   config: Config,
   source: RandomSource,
   parameter: AxiosRequestConfig,
   optionInfoMap: OptionInfoMap,
-  event: Event,
+  session: Session,
   workData: WorkData
 }) {
   let expert = source.expert;
@@ -207,7 +231,7 @@ async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, e
   }
 
   parameter.headers = expert.requestHeaders || {};
-  formatObjOption({obj: parameter.headers, optionInfoMap, event, compelString: false});
+  formatObjOption({obj: parameter.headers, optionInfoMap, session, compelString: false});
 
   switch (expert.requestDataType) {
     case "raw": {
@@ -222,7 +246,7 @@ async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, e
         parameter.data = requestData;
       } else {
         parameter.data = JSON.parse(requestData);
-        formatObjOption({obj: parameter.data, optionInfoMap, event, compelString: false});
+        formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: false});
       }
       break;
     }
@@ -232,7 +256,7 @@ async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, e
       }
       parameter.headers['Content-Type'] = 'multipart/form-data';
       parameter.data = JSON.parse(expert.requestData || "{}");
-      formatObjOption({obj: parameter.data, optionInfoMap, event, compelString: true});
+      formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
 
       const fileOverwriteKeys = [];
       for (let key in optionInfoMap.infoMap) {
@@ -250,12 +274,11 @@ async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, e
           url: optionInfo.value + '',
           responseType: "arraybuffer",
         }
-        handleReqProxyAgent({ctx, config, parameter:fileParameter});
-        if (Strings.isNotBlank(expert.proxyAgent)) {
-          handleProxyAgent(fileParameter, expert.proxyAgent);
-        }
+        handleReqPlatformProxyConfig({ctx, config, session, parameter: fileParameter})
         const fileRes = await axios(fileParameter);
-        const tempFilePath = path.join(os.tmpdir(), crypto.createHash('md5').update(fileRes.data).digest('hex'));
+        const tempFilePath = path.join(os.tmpdir(),
+          Strings.isNotBlank(optionInfo.fileName) ? optionInfo.fileName : crypto.createHash('md5').update(fileRes.data).digest('hex'),
+        );
         await fs.promises.writeFile(tempFilePath, fileRes.data);
         workData.tempFiles.push(tempFilePath);
         parameter.data[oKey] = fs.createReadStream(tempFilePath);
@@ -276,7 +299,7 @@ async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, e
       }
       parameter.headers['Content-Type'] = 'application/x-www-form-urlencoded';
       parameter.data = JSON.parse(expert.requestData);
-      formatObjOption({obj: parameter.data, optionInfoMap, event, compelString: true});
+      formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
       break;
     }
   }
@@ -292,11 +315,11 @@ async function handleReq({ctx, config, source, argv, workData,}: {
   const optionInfoMap = handleOptionInfos({source, argv});
 
   const parameter: AxiosRequestConfig = {
-    url: formatOption({content: source.sourceUrl, optionInfoMap, event: argv.session?.event}),
+    url: formatOption({content: source.sourceUrl, optionInfoMap, session: argv.session}),
     method: source.requestMethod,
   };
-  handleReqProxyAgent({ctx, config, parameter});
-  await handleReqExpert({ctx, config, source, parameter, optionInfoMap, event: argv.session?.event, workData});
+  handleReqConfigProxyConfig({ctx, config, parameter});
+  await handleReqExpert({ctx, config, source, parameter, optionInfoMap, session: argv.session, workData});
 
   return parameter;
 }

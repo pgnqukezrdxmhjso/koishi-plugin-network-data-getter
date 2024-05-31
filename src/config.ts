@@ -70,10 +70,18 @@ export interface PresetFn {
   body: string,
 }
 
-export interface ConfigExpert {
+export interface ProxyConfig {
   proxyType: ProxyType,
   proxyAgent?: string,
   timeout?: number,
+}
+
+export interface PlatformResourceProxy extends ProxyConfig {
+  name: string,
+}
+
+export interface ConfigExpert extends ProxyConfig {
+  platformResourceProxyList?: PlatformResourceProxy[],
   presetConstants: PresetConstant[]
   presetFns: PresetFn[]
 }
@@ -103,6 +111,29 @@ function unionOrObject(
   return list;
 }
 
+function proxyConfigSchema() {
+  return [Schema.object({
+    proxyType: Schema.union([
+      Schema.const('NONE').description('無'),
+      Schema.const('GLOBAL').description('全域性'),
+      Schema.const('MANUAL').description('自定義'),
+    ]).description('代理型別').role('radio').default('GLOBAL'),
+  }),
+    Schema.union([
+      Schema.object({
+        proxyType: Schema.const('MANUAL').required(),
+        proxyAgent: Schema.string().description('地址').required(),
+      }),
+      Schema.object({} as any)
+    ]),
+    Schema.union([
+      ...unionOrObject('proxyType', ['NONE', 'MANUAL'], () => ({
+        timeout: Schema.number().description('請求超時時間').default(30 * 1000),
+      })),
+      Schema.object({} as any),
+    ]),]
+}
+
 export const Config: Schema<Config> = Schema.intersect([
   Schema.intersect([
     Schema.object({
@@ -116,27 +147,14 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.object({
         expertMode: Schema.const(true).required(),
         expert: Schema.intersect([
+          ...proxyConfigSchema(),
           Schema.object({
-            proxyType: Schema.union([
-              Schema.const('NONE').description('無'),
-              Schema.const('GLOBAL').description('全域性'),
-              Schema.const('MANUAL').description('自定義'),
-            ]).description('代理型別').role('radio').default('GLOBAL'),
-          }),
-          Schema.union([
-            Schema.object({
-              proxyType: Schema.const('MANUAL').required(),
-              proxyAgent: Schema.string().description('地址').required(),
-            }),
-            Schema.object({} as any)
-          ]),
-          Schema.union([
-            ...unionOrObject('proxyType', ['NONE', 'MANUAL'], () => ({
-              timeout: Schema.number().description('請求超時時間').default(30 * 1000),
-            })),
-            Schema.object({} as any),
-          ]),
-          Schema.object({
+            platformResourceProxyList: Schema.array(Schema.intersect([
+              Schema.object({
+                name: Schema.string().description('平臺名').required(),
+              }),
+              ...proxyConfigSchema(),
+            ])).description('平臺資源下載代理(平臺指discord、telegram等,資源指指令中的圖片、影片、音訊、檔案)').collapse(),
             presetConstants: Schema.array(Schema.intersect([
               Schema.object({
                 name: Schema.string().description('常量名').required(),
