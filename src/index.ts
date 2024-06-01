@@ -1,17 +1,16 @@
-import {Argv, Command, Context, Element} from 'koishi';
+import {Argv, Command, Context} from 'koishi';
 import axios from "axios";
 import {Config} from './config';
 import {clearRecalls} from './send';
 import {logger} from './logger';
 import {initConfig, onDispose, send} from "./core";
 import Strings from "./utils/Strings";
-import Arrays from "./utils/Arrays";
 
 export {Config} from './config'
 export const name = 'network-data-getter'
 // noinspection JSUnusedGlobalSymbols
 export const usage = `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>`
-
+export const inject = [];
 
 export function apply(ctx: Context, config: Config) {
   initConfig({ctx, config});
@@ -20,33 +19,46 @@ export function apply(ctx: Context, config: Config) {
     clearRecalls();
   });
 
-  ctx.middleware(async (session, next) => {
-    if (Arrays.isEmpty(config.sources)) {
-      return next();
+  const allCmd: Set<String> = new Set();
+  config.sources?.forEach(source => {
+    allCmd.add(source.command);
+    source.alias?.forEach(alias => {
+      allCmd.add(alias);
+    });
+  });
+
+  ctx.on('message', (session) => {
+    if (!session.quote) {
+      return;
     }
-    let cmd: string;
-    if (Strings.isNotEmpty(session.quote?.content)) {
-      const firstTextIndex = session.elements.findIndex(ele => ele.type === 'text');
-      cmd = session.elements.slice(firstTextIndex, session.elements.length).join(' ') + ' ' + session.quote.elements.join(' ');
-    } else if (session.content.trim().startsWith('<quote ')) {
-      const elements = Element.parse(session.content);
-      const quoteElement = elements.shift();
-      elements.push(...quoteElement.children?.filter(ele => ele.type !== 'author'));
-      cmd = elements.join(' ');
+    const elements = [...session.elements];
+    const firstTextIndex = elements.findIndex(ele => ele.type === 'text');
+    if (firstTextIndex > 0) {
+      elements.splice(0, firstTextIndex);
     }
-    if (!cmd) {
-      return next();
-    }
-    cmd = cmd.trim();
+    let cmd: string = elements[0].attrs['content']?.trim() + '';
     session.app.config.prefix?.forEach((p: string) => {
       cmd = cmd.replace(new RegExp('^' + p), '').trim();
     })
     const prefix = cmd.split(/\s/)[0];
-    if (config.sources.find(source => source.command === prefix || source.alias?.includes(prefix))) {
-      await session.execute(cmd, next);
+    if (!allCmd.has(prefix)) {
       return;
     }
-    return next();
+    elements.push(...session.quote.elements);
+    delete session.event.message.quote;
+    elements.forEach((element, index) => {
+      if (element.type === 'text') {
+        const content = (element.attrs?.content + '').trim();
+        if (index < elements.length - 1) {
+          element.attrs.content = content + ' ';
+        } else {
+          element.attrs.content = ' ' + content;
+        }
+      }
+    });
+    session.elements.length = 0;
+    session.elements.push(...elements);
+    session.event.message.content = session.elements.join('');
   }, true);
 
   config.sources.forEach(source => {
