@@ -1,5 +1,5 @@
-import { AxiosResponse } from "axios"
-import { SplitType } from "./config"
+import {AxiosResponse} from "axios"
+import {SplitType} from "./config"
 
 
 const convertMap: { [key in SplitType | string]: (res: AxiosResponse) => any } = {

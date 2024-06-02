@@ -1,4 +1,4 @@
-import { Logger } from "koishi";
+import {Logger} from "koishi";
 
 
 export const logger = new Logger('network-data-getter')

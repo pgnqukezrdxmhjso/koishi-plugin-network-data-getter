@@ -46,15 +46,19 @@ export function apply(ctx: Context, config: Config) {
     }
     elements.push(...session.quote.elements);
     delete session.event.message.quote;
+    const lastIndex = elements.length - 1;
     elements.forEach((element, index) => {
-      if (element.type === 'text') {
-        const content = (element.attrs?.content + '').trim();
-        if (index < elements.length - 1) {
-          element.attrs.content = content + ' ';
-        } else {
-          element.attrs.content = ' ' + content;
-        }
+      if (element.type !== 'text') {
+        return;
       }
+      let content = (element.attrs?.content + '').trim();
+      if (index < lastIndex) {
+        content = content + ' ';
+      }
+      if (index !== 0 && elements[index - 1].type !== 'text') {
+        content = ' ' + content;
+      }
+      element.attrs.content = content;
     });
     session.elements.length = 0;
     session.elements.push(...elements);

@@ -1,11 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import crypto from "node:crypto";
-import {Argv, Context, Session} from "koishi";
+import {Argv, Context, Element, Session} from "koishi";
 import axios, {AxiosRequestConfig, AxiosResponse} from "axios";
 import {HttpsProxyAgent} from 'https-proxy-agent';
-import NodeHtmlParser from 'node-html-parser';
 import * as OTPAuth from "otpauth";
 import {Config, extractOptions, ProxyConfig, RandomSource} from "./config";
 import {logger} from "./logger";
@@ -14,6 +12,8 @@ import {parseSource} from "./split";
 import {sendSource} from "./send";
 import Objects from "./utils/Objects";
 import Arrays from "./utils/Arrays";
+import Files from "./utils/Files";
+import {pipeline} from "node:stream/promises";
 
 type OptionInfo = {
   value: boolean | string | number,
@@ -153,13 +153,19 @@ function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv })
     ) {
       continue;
     }
-    const htmlElement = NodeHtmlParser.parse(value).querySelector("img,audio,video,file");
-    const imgSrc = htmlElement.getAttribute('src');
-    if (Strings.isNotBlank(imgSrc)) {
-      map[key] = imgSrc;
-      optionInfo.value = imgSrc;
-      optionInfo.isFileUrl = true;
-      optionInfo.fileName = htmlElement.getAttribute('file');
+    const element = Element.parse(value.trim())[0];
+    const imgSrc = element.attrs['src'];
+    if (Strings.isBlank(imgSrc)) {
+      continue;
+    }
+    map[key] = imgSrc;
+    optionInfo.value = imgSrc;
+    optionInfo.isFileUrl = true;
+    for (let attrsKey in element.attrs) {
+      if (attrsKey.toLowerCase().includes('file')) {
+        optionInfo.fileName = element.attrs[attrsKey];
+        break;
+      }
     }
   }
   return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
@@ -270,18 +276,20 @@ async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, s
         ) {
           continue;
         }
+
         const fileParameter: AxiosRequestConfig = {
           url: optionInfo.value + '',
-          responseType: "arraybuffer",
+          responseType: "stream",
         }
         handleReqPlatformProxyConfig({ctx, config, session, parameter: fileParameter})
+
         const fileRes = await axios(fileParameter);
-        const tempFilePath = path.join(os.tmpdir(),
-          Strings.isNotBlank(optionInfo.fileName) ? optionInfo.fileName : crypto.createHash('md5').update(fileRes.data).digest('hex'),
-        );
-        await fs.promises.writeFile(tempFilePath, fileRes.data);
-        workData.tempFiles.push(tempFilePath);
-        parameter.data[oKey] = fs.createReadStream(tempFilePath);
+        let tmpFilePath = await Files.tmpFile();
+        const writer = fs.createWriteStream(tmpFilePath);
+        await pipeline(fileRes.data, writer);
+        tmpFilePath = await Files.tmpFileMoveBeautifyName(tmpFilePath, optionInfo.fileName);
+        workData.tempFiles.push(tmpFilePath);
+        parameter.data[oKey] = fs.createReadStream(tmpFilePath);
         fileOverwriteKeys.push(oKey);
       }
       for (let key in expert.requestFormFiles) {
