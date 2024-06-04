@@ -3,10 +3,11 @@ import {tmpdir} from "node:os";
 import {createHash, randomUUID} from "node:crypto";
 import fs, {createReadStream} from "node:fs";
 import {access, rename} from "node:fs/promises";
-import {fileTypeFromStream} from 'file-type';
 import {pipeline} from "node:stream/promises";
 
 import Strings from "./Strings";
+import LoadFileType from "./LoadFileType.js";
+
 
 const Files = {
   async tmpFile() {
@@ -29,7 +30,7 @@ const Files = {
       return newName;
     }
     let readStream = createReadStream(tmpFilePath);
-    const fileType = await fileTypeFromStream(readStream);
+    const fileType = await (await LoadFileType()).fileTypeFromStream(readStream);
     readStream.destroy();
     if (!fileType) {
       return tmpFilePath;
