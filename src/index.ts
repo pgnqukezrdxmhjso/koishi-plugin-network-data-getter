@@ -1,22 +1,23 @@
 import {Argv, Command, Context} from 'koishi';
 import axios from "axios";
 import {Config} from './config';
-import {clearRecalls} from './send';
 import {logger} from './logger';
-import {initConfig, onDispose, send} from "./core";
+import Core from "./Core";
 import Strings from "./utils/Strings";
 
+export const inject = [];
 export {Config} from './config'
 export const name = 'network-data-getter'
 // noinspection JSUnusedGlobalSymbols
+export const reusable = true;
+// noinspection JSUnusedGlobalSymbols
 export const usage = `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>`
-export const inject = [];
 
 export function apply(ctx: Context, config: Config) {
+  const {initConfig, onDispose, send} = Core();
   initConfig({ctx, config});
   ctx.on('dispose', () => {
     onDispose();
-    clearRecalls();
   });
 
   const allCmd: Set<String> = new Set();

@@ -9,88 +9,88 @@ export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 
 export interface CommandArg {
-  name: string,
-  desc?: string,
-  type: 'string' | 'number' | 'user' | 'channel',
-  required: boolean,
-  autoOverwrite: boolean,
-  overwriteKey?: string
+  name: string;
+  desc?: string;
+  type: 'string' | 'number' | 'user' | 'channel';
+  required: boolean;
+  autoOverwrite: boolean;
+  overwriteKey?: string;
 }
 
 export interface CommandOption {
-  name: string,
-  acronym?: string,
-  desc?: string,
-  type: 'boolean' | 'string' | 'number' | 'user' | 'channel',
-  value?: boolean | string | number,
-  autoOverwrite: boolean,
-  overwriteKey?: string
+  name: string;
+  acronym?: string;
+  desc?: string;
+  type: 'boolean' | 'string' | 'number' | 'user' | 'channel';
+  value?: boolean | string | number;
+  autoOverwrite: boolean;
+  overwriteKey?: string;
 }
 
 export interface SourceExpert {
-  commandArgs: CommandArg[],
-  commandOptions: CommandOption[],
-  requestHeaders: Dict<string, string>,
-  requestDataType: RequestDataType,
-  requestData?: string,
-  requestFormFiles?: Dict<string, string>,
-  requestJson?: boolean,
-  proxyAgent?: string,
+  commandArgs: CommandArg[];
+  commandOptions: CommandOption[];
+  requestHeaders: Dict<string, string>;
+  requestDataType: RequestDataType;
+  requestData?: string;
+  requestFormFiles?: Dict<string, string>;
+  requestJson?: boolean;
+  proxyAgent?: string;
 }
 
 export interface RandomSource {
-  command: string,
-  alias: string[],
-  desc: string,
-  reverseGettingTips?: boolean,
-  recall?: number,
-  sourceUrl: string,
-  requestMethod: RequestMethod,
-  expertMode: boolean,
-  expert?: SourceExpert,
-  sendType: SendType,
-  dataType: SplitType,
+  command: string;
+  alias: string[];
+  desc: string;
+  reverseGettingTips?: boolean;
+  recall?: number;
+  sourceUrl: string;
+  requestMethod: RequestMethod;
+  expertMode: boolean;
+  expert?: SourceExpert;
+  sendType: SendType;
+  dataType: SplitType;
 
-  jsonKey?: string,
-  jquerySelector?: string,
-  attribute?: string,
-  ejsTemplate?: string,
+  jsonKey?: string;
+  jquerySelector?: string;
+  attribute?: string;
+  ejsTemplate?: string;
 }
 
 
 export interface PresetConstant {
-  name: string,
-  type: 'boolean' | 'string' | 'number' | 'file',
-  value?: boolean | string | number,
+  name: string;
+  type: 'boolean' | 'string' | 'number' | 'file';
+  value?: boolean | string | number;
 }
 
 export interface PresetFn {
-  name: string,
-  args: string,
-  body: string,
+  name: string;
+  args: string;
+  body: string;
 }
 
 export interface ProxyConfig {
-  proxyType: ProxyType,
-  proxyAgent?: string,
-  timeout?: number,
+  proxyType: ProxyType;
+  proxyAgent?: string;
+  timeout?: number;
 }
 
 export interface PlatformResourceProxy extends ProxyConfig {
-  name: string,
+  name: string;
 }
 
 export interface ConfigExpert extends ProxyConfig {
-  platformResourceProxyList?: PlatformResourceProxy[],
-  presetConstants: PresetConstant[]
-  presetFns: PresetFn[]
+  platformResourceProxyList?: PlatformResourceProxy[];
+  presetConstants: PresetConstant[];
+  presetFns: PresetFn[];
 }
 
 export interface Config {
-  gettingTips: boolean,
-  expertMode: boolean,
-  expert?: ConfigExpert,
-  sources: RandomSource[],
+  gettingTips: boolean;
+  expertMode: boolean;
+  expert?: ConfigExpert;
+  sources: RandomSource[];
 }
 
 function unionOrObject(
