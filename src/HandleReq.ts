@@ -3,20 +3,24 @@ import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 import {Argv, Context, Element, Session} from "koishi";
+import {GuildMember} from "@satorijs/protocol/src";
 import {HttpsProxyAgent} from "https-proxy-agent";
 import axios, {AxiosRequestConfig} from "axios";
 import * as OTPAuth from "otpauth";
 
-import {Config, ProxyConfig, RandomSource} from "./config";
+import {CommandArg, CommandOption, Config, OptionValue, ProxyConfig, RandomSource} from "./config";
 import Strings from "./utils/Strings";
 import Files from "./utils/Files";
 import Objects from "./utils/Objects";
 import Arrays from "./utils/Arrays";
 import {WorkData} from "./Core";
+import KoishiUtil from "./utils/KoishiUtil";
 
+
+type OptionInfoValue = OptionValue | GuildMember
 
 interface OptionInfo {
-  value: boolean | string | number;
+  value: OptionInfoValue;
   fileName?: string;
   isFileUrl?: boolean;
   autoOverwrite: boolean;
@@ -25,7 +29,7 @@ interface OptionInfo {
 
 interface OptionInfoMap {
   infoMap: Record<string, OptionInfo>;
-  map: Record<string, boolean | string | number>;
+  map: Record<string, OptionInfoValue>;
   fnArg: string;
 }
 
@@ -33,7 +37,7 @@ interface OptionInfoMap {
 export default function () {
 
   const httpsProxyAgentPool: Record<string, HttpsProxyAgent<string>> = {};
-  const presetConstantPool: Record<string, boolean | string | number> = {};
+  const presetConstantPool: Record<string, OptionValue> = {};
   let presetConstantPoolFnArg = '{}={}';
 
   const presetFnPool: Record<string, Function> = {};
@@ -111,52 +115,57 @@ export default function () {
     handleProxyConfig({ctx, proxyConfig: platformResourceProxy, parameter})
   }
 
-  function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv }): OptionInfoMap {
-    const map = {};
-    const infoMap: Record<string, OptionInfo> = {};
-    const fnArgs = [];
-    const expert = source.expert;
-    if (source.expertMode && expert) {
-      expert.commandOptions?.forEach(option => {
-        const value = argv.options?.[option.name];
-        map[option.name] = value;
-        infoMap[option.name] = {
-          value,
-          autoOverwrite: option.autoOverwrite,
-          overwriteKey: option.overwriteKey,
-        };
-      });
-
-      expert.commandArgs?.forEach((arg, i) => {
-        const value = argv.args?.[i];
-        map[arg.name] = value;
-        infoMap[arg.name] = {
-          value,
-          autoOverwrite: arg.autoOverwrite,
-          overwriteKey: arg.overwriteKey,
-        };
-        map['$' + i] = value;
-        infoMap['$' + i] = infoMap[arg.name];
-      });
+  async function handleOptionInfoData({optionInfo, option, argv}: {
+    optionInfo: OptionInfo,
+    option: CommandArg | CommandOption
+    argv: Argv
+  }) {
+    if (typeof optionInfo.value !== 'string') {
+      return;
     }
-
-    for (const key in infoMap) {
-      fnArgs.push(key);
-      const optionInfo = infoMap[key];
-      const value = optionInfo.value;
-      if (
-        typeof value !== 'string'
-        || !(/^<(img|audio|video|file)/).test(value.trim())
-        || (/&lt;(img|audio|video|file)/).test(argv.source)
-      ) {
-        continue;
+    const value = optionInfo.value.trim();
+    if (option.type === 'user') {
+      const u = value.split(':')[1];
+      if (Strings.isBlank(u)) {
+        return;
       }
+      let exist = false;
+      await KoishiUtil.forList(
+        (member) => {
+          const nick = member.nick ?? member.user?.nick;
+          const name = member.name ?? member.user?.name;
+          if (u !== member.user?.id && u !== nick && u !== name) {
+            return;
+          }
+          exist = true;
+          const val = {
+            ...member,
+            user: {...member.user},
+            nick,
+            name,
+          }
+          val.toString = () => val.user.id + ':' + val.nick ?? val.name
+          optionInfo.value = val;
+          return false;
+        },
+        argv.session.bot, argv.session.bot.getGuildMemberList,
+        argv.session.guildId
+      );
+      if (!exist) {
+        optionInfo.value = {
+          name: u
+        };
+        optionInfo.value.toString = () => ":" + u;
+      }
+    } else if (
+      (/^<(img|audio|video|file)/).test(value.trim())
+      && !(/&lt;(img|audio|video|file)/).test(argv.source)
+    ) {
       const element = Element.parse(value.trim())[0];
       const imgSrc = element.attrs['src'];
       if (Strings.isBlank(imgSrc)) {
-        continue;
+        return;
       }
-      map[key] = imgSrc;
       optionInfo.value = imgSrc;
       optionInfo.isFileUrl = true;
       for (let attrsKey in element.attrs) {
@@ -165,6 +174,51 @@ export default function () {
           break;
         }
       }
+    }
+  }
+
+  async function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv }): Promise<OptionInfoMap> {
+    const map: Record<string, OptionInfoValue> = {};
+    const infoMap: Record<string, OptionInfo> = {};
+    const fnArgs = [];
+    const expert = source.expert;
+    if (source.expertMode && expert) {
+      for (const option of expert.commandOptions) {
+        const optionInfo: OptionInfo = {
+          value: argv.options?.[option.name],
+          autoOverwrite: option.autoOverwrite,
+          overwriteKey: option.overwriteKey,
+        };
+        await handleOptionInfoData({
+          optionInfo,
+          option,
+          argv,
+        });
+        map[option.name] = optionInfo.value;
+        infoMap[option.name] = optionInfo;
+      }
+
+      for (const arg of expert.commandArgs) {
+        const i = expert.commandArgs.indexOf(arg);
+        const optionInfo: OptionInfo = {
+          value: argv.args?.[i],
+          autoOverwrite: arg.autoOverwrite,
+          overwriteKey: arg.overwriteKey,
+        }
+        await handleOptionInfoData({
+          optionInfo,
+          option: arg,
+          argv,
+        });
+        map[arg.name] = optionInfo.value;
+        infoMap[arg.name] = optionInfo;
+        map['$' + i] = optionInfo.value;
+        infoMap['$' + i] = optionInfo;
+      }
+    }
+
+    for (const key in infoMap) {
+      fnArgs.push(key);
     }
     return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
   }
@@ -317,7 +371,7 @@ export default function () {
     argv: Argv,
     workData: WorkData,
   }) {
-    const optionInfoMap = handleOptionInfos({source, argv});
+    const optionInfoMap = await handleOptionInfos({source, argv});
 
     const parameter: AxiosRequestConfig = {
       url: formatOption({content: source.sourceUrl, optionInfoMap, session: argv.session}),

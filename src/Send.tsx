@@ -1,12 +1,12 @@
 import {Context, Fragment, Session} from "koishi";
-import {SendType} from "./config";
+import {RandomSource, SendType} from "./config";
 import {getRandom} from "./utils";
 import {render} from 'ejs'
 import {logger} from "./logger";
 
 interface SendMechanic {
-  canSend: (s: string, options?: any) => boolean
-  toJsx: (s: string, options?: any) => (any | Fragment)
+  canSend: (s: string, source: RandomSource) => boolean
+  toJsx: (s: string, source: RandomSource) => (any | Fragment)
 }
 
 export default function () {
@@ -40,10 +40,10 @@ export default function () {
 
     'ejs': {
       canSend: (s: string) => true,
-      toJsx: (s: string, options?: any) => {
+      toJsx: (s: string, source: RandomSource) => {
         try {
           const data = JSON.parse(s)
-          const {ejsTemplate} = options;
+          const {ejsTemplate} = source;
           if (ejsTemplate) {
             return render(ejsTemplate, {data})
           } else {
@@ -59,21 +59,21 @@ export default function () {
   }
 
 
-  async function sendSource(session: Session<never, never, Context>, type: SendType, source: string[], recall?: number, options?: any) {
+  async function sendSource(session: Session<never, never, Context>, source: RandomSource, elements: string[]) {
     try {
-      const sendMechanic = sendMap[type]
+      const sendMechanic = sendMap[source.sendType]
       if (!sendMechanic) {
-        await session.send(`不支持的发送类型: ${type}`)
+        await session.send(`不支持的发送类型: ${source.sendType}`)
         return
       }
-      const filtered = source.filter(s => sendMechanic.canSend(s, options))
-      logger.info(`源数据量: ${source.length}, 发送数据量: ${filtered.length}`)
+      const filtered = elements.filter(s => sendMechanic.canSend(s, source))
+      logger.info(`源数据量: ${elements.length}, 发送数据量: ${filtered.length}`)
       const selected = getRandom(filtered)
       if (selected && selected.length > 0) {
-        const [msg] = await session.send(sendMechanic.toJsx(selected, options))
-        if (recall > 0) {
-          logger.debug(`设置${recall}分钟后撤回`)
-          const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), recall * 60000)
+        const [msg] = await session.send(sendMechanic.toJsx(selected, source))
+        if (source.recall > 0) {
+          logger.debug(`设置${source.recall}分钟后撤回`)
+          const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000)
           recalls.add(timeout)
         }
       } else {

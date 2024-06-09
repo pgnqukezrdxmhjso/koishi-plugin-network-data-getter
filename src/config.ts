@@ -7,6 +7,7 @@ export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
 export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH' | 'PURGE' | 'LINK' | 'UNLINK'
 export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
+export type OptionValue = boolean | string | number;
 
 export interface CommandArg {
   name: string;
@@ -22,7 +23,7 @@ export interface CommandOption {
   acronym?: string;
   desc?: string;
   type: 'boolean' | 'string' | 'number' | 'user' | 'channel';
-  value?: boolean | string | number;
+  value?: OptionValue;
   autoOverwrite: boolean;
   overwriteKey?: string;
 }
@@ -61,7 +62,7 @@ export interface RandomSource {
 export interface PresetConstant {
   name: string;
   type: 'boolean' | 'string' | 'number' | 'file';
-  value?: boolean | string | number;
+  value?: OptionValue;
 }
 
 export interface PresetFn {
@@ -268,7 +269,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
-                  ]).description('型別  \n字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('string'),
+                  ]).description('型別  \n字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n用戶型別可使用[guildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`').default('string'),
                   required: Schema.boolean().description('必填').default(false),
                   autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
                 }),
@@ -291,7 +292,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
-                  ]).description('型別  \n字串型別可解析出選項中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案').default('boolean'),
+                  ]).description('型別  \n字串型別可解析出選項中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n用戶型別可使用[guildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`').default('boolean'),
                 }),
                 Schema.union([
                   Schema.object({

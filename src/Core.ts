@@ -46,7 +46,7 @@ export default function () {
       const options = extractOptions(source);
       logger.debug('options: ', options);
       const elements = parseSource(res, source.dataType, options);
-      await sendSource(session, source.sendType, elements, source.recall, options);
+      await sendSource(session, source, elements);
 
     } finally {
       workData.tempFiles.forEach(file => {
