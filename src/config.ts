@@ -2,6 +2,8 @@ import {Dict, Schema} from 'koishi'
 import fs from "node:fs";
 import path from "node:path";
 
+import GeneratePresetFns from './GeneratePresetFns.js'
+
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
 export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH' | 'PURGE' | 'LINK' | 'UNLINK'
@@ -190,7 +192,7 @@ export const Config: Schema<Config> = Schema.intersect([
               name: Schema.string().description('函式名').required(),
               args: Schema.string().description('引數; 例如 a,b'),
               body: Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
-            })).description(
+            })).default(GeneratePresetFns()).description(
               '預設函式，可在後續配置中使用  \n' +
               '可使用的模組: 變數名  \n' +
               '[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n' +
@@ -269,7 +271,11 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
-                  ]).description('型別  \n字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n用戶型別可使用[guildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`').default('string'),
+                  ]).description('型別  \n' +
+                    '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
+                    '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
+                    '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`')
+                    .default('string'),
                   required: Schema.boolean().description('必填').default(false),
                   autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
                 }),
@@ -292,7 +298,11 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
-                  ]).description('型別  \n字串型別可解析出選項中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n用戶型別可使用[guildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`').default('boolean'),
+                  ]).description('型別  \n' +
+                    '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
+                    '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
+                    '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`')
+                    .default('boolean'),
                 }),
                 Schema.union([
                   Schema.object({

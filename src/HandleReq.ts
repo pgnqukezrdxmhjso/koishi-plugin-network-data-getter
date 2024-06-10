@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 import {Argv, Context, Element, Session} from "koishi";
-import {GuildMember} from "@satorijs/protocol/src";
+import {Channel, GuildMember} from "@satorijs/protocol/src";
 import {HttpsProxyAgent} from "https-proxy-agent";
 import axios, {AxiosRequestConfig} from "axios";
 import * as OTPAuth from "otpauth";
@@ -17,7 +17,7 @@ import {WorkData} from "./Core";
 import KoishiUtil from "./utils/KoishiUtil";
 
 
-type OptionInfoValue = OptionValue | GuildMember
+type OptionInfoValue = OptionValue | GuildMember | Channel
 
 interface OptionInfo {
   value: OptionInfoValue;
@@ -144,7 +144,7 @@ export default function () {
             nick,
             name,
           }
-          val.toString = () => val.user.id + ':' + val.nick ?? val.name
+          val.toString = () => val.user.id + ':' + (val.nick ?? val.name)
           optionInfo.value = val;
           return false;
         },
@@ -156,6 +156,32 @@ export default function () {
           name: u
         };
         optionInfo.value.toString = () => ":" + u;
+      }
+    } else if (option.type === 'channel') {
+      const c = value.split(':')[1];
+      if (Strings.isBlank(c)) {
+        return;
+      }
+      let exist = false;
+      await KoishiUtil.forList(
+        (channel) => {
+          if (c !== channel.id && c !== channel.name) {
+            return;
+          }
+          exist = true;
+          const val = {...channel};
+          val.toString = () => val.id + ':' + val.name;
+          optionInfo.value = val;
+          return false;
+        },
+        argv.session.bot, argv.session.bot.getChannelList,
+        argv.session.guildId
+      );
+      if (!exist) {
+        optionInfo.value = {
+          name: c
+        };
+        optionInfo.value.toString = () => ":" + c;
       }
     } else if (
       (/^<(img|audio|video|file)/).test(value.trim())
