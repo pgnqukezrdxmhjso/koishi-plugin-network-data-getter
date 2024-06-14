@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import {Argv, Context} from "koishi";
 import axios, {AxiosResponse} from "axios";
-import {Config, extractOptions, RandomSource} from "./config";
+import {Config, RandomSource} from "./config";
 import {logger} from "./logger";
 import {parseSource} from "./split";
 import Send from "./Send";
@@ -43,9 +43,7 @@ export default function () {
         throw new Error(`${msg} (${res.statusText})`);
       }
 
-      const options = extractOptions(source);
-      logger.debug('options: ', options);
-      const elements = parseSource(res, source.dataType, options);
+      const elements = parseSource(res,  source);
       await sendSource(session, source, elements);
 
     } finally {

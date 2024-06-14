@@ -4,8 +4,9 @@ import {Config} from './config';
 import {logger} from './logger';
 import Core from "./Core";
 import Strings from "./utils/Strings";
+import Umami from "./Umami";
 
-export const inject = [];
+export const inject = ['http'];
 export {Config} from './config'
 export const name = 'network-data-getter'
 // noinspection JSUnusedGlobalSymbols
@@ -14,6 +15,14 @@ export const reusable = true;
 export const usage = `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>`
 
 export function apply(ctx: Context, config: Config) {
+  Umami.send({
+    ctx,
+    url: 'plugin_ready',
+    urlSearchParams: {
+      uid: ctx.scope.uid
+    }
+  });
+
   const {initConfig, onDispose, send} = Core();
   initConfig({ctx, config});
   ctx.on('dispose', () => {

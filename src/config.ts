@@ -90,6 +90,7 @@ export interface ConfigExpert extends ProxyConfig {
 }
 
 export interface Config {
+  anonymousStatistics: boolean;
   gettingTips: boolean;
   expertMode: boolean;
   expert?: ConfigExpert;
@@ -143,6 +144,7 @@ export const Config: Schema<Config> = Schema.intersect([
       _versionHistory: Schema.object({
         _: Schema.never().description(fs.readFileSync(path.join(__dirname, './versionHistory.md')).toString())
       }).description('更新歷史').collapse(),
+      anonymousStatistics: Schema.boolean().description('匿名資料統計（記錄插件啟用的次數）').default(true),
       gettingTips: Schema.boolean().description('獲取中提示').default(true),
       expertMode: Schema.boolean().description('專家模式').default(false),
     }).description('基礎設定'),
@@ -367,20 +369,3 @@ export const Config: Schema<Config> = Schema.intersect([
     ]).description('--- \n ---')),
   }).description('指令設定')
 ])
-
-const optionKeys: string[] = [
-  'jsonKey',
-  'jquerySelector',
-  'attribute',
-  'ejsTemplate'
-]
-
-export function extractOptions(source: RandomSource): object {
-  const options: any = {}
-  optionKeys.forEach(key => {
-    if (source[key]) {
-      options[key] = source[key]
-    }
-  })
-  return options
-}
