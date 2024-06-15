@@ -2,19 +2,19 @@ import {pipeline} from "node:stream/promises";
 import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
-import {Argv, Context, Element, Session} from "koishi";
 import {Channel, GuildMember} from "@satorijs/protocol/src";
+import {Argv, Context, Element, Session} from "koishi";
 import {HttpsProxyAgent} from "https-proxy-agent";
 import axios, {AxiosRequestConfig} from "axios";
 import * as OTPAuth from "otpauth";
 
 import {CommandArg, CommandOption, Config, OptionValue, ProxyConfig, RandomSource} from "./config";
+import KoishiUtil from "./utils/KoishiUtil";
 import Strings from "./utils/Strings";
-import Files from "./utils/Files";
 import Objects from "./utils/Objects";
 import Arrays from "./utils/Arrays";
+import Files from "./utils/Files";
 import {WorkData} from "./Core";
-import KoishiUtil from "./utils/KoishiUtil";
 
 
 type OptionInfoValue = OptionValue | GuildMember | Channel
@@ -33,6 +33,7 @@ interface OptionInfoMap {
   fnArg: string;
 }
 
+const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
 export default function () {
 
@@ -249,33 +250,49 @@ export default function () {
     return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
   }
 
-  function formatOption({content, optionInfoMap, session}: {
+  async function formatOption({content, optionInfoMap, session}: {
     content: string,
     optionInfoMap: OptionInfoMap,
     session: Session,
-  }): string {
-    return content
+  }): Promise<string> {
+    const contentList = [];
+    content = content
       .replace(/\n/g, '\\n')
       .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-        const value =
-          Function(
-            '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + p1
-          )(
-            session.event, presetConstantPool ?? {}, presetFnPool ?? {}, optionInfoMap.map ?? {}
-          );
-        return value ?? '';
+        contentList.push(p1);
+        return match;
       });
+    if (contentList.length < 1) {
+      return content;
+    }
+
+    const resMap = {};
+    for (let i = 0; i < contentList.length; i++) {
+      const item = contentList[i];
+      resMap[i + '_' + item] = await AsyncFunction(
+        '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + item
+      )(
+        session.event, presetConstantPool ?? {}, presetFnPool ?? {}, optionInfoMap.map ?? {}
+      );
+    }
+
+    let i = 0;
+    content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
+      return resMap[i++ + '_' + p1] ?? '';
+    })
+
+    return content;
   }
 
-  function formatObjOption({obj, optionInfoMap, session, compelString}: {
+  async function formatObjOption({obj, optionInfoMap, session, compelString}: {
     obj: {},
     optionInfoMap: OptionInfoMap,
     session: Session,
     compelString: boolean
   }) {
-    Objects.thoroughForEach(obj, (value, key, obj) => {
+    await Objects.thoroughForEach(obj, async (value, key, obj) => {
       if (typeof value === 'string') {
-        obj[key] = formatOption({content: obj[key], optionInfoMap, session})
+        obj[key] = await formatOption({content: obj[key], optionInfoMap, session})
       }
     });
 
@@ -315,7 +332,7 @@ export default function () {
     }
 
     parameter.headers = expert.requestHeaders || {};
-    formatObjOption({obj: parameter.headers, optionInfoMap, session, compelString: false});
+    await formatObjOption({obj: parameter.headers, optionInfoMap, session, compelString: false});
 
     switch (expert.requestDataType) {
       case "raw": {
@@ -327,7 +344,7 @@ export default function () {
         }
         if (expert.requestJson) {
           parameter.data = JSON.parse(expert.requestData);
-          formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: false});
+          await formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: false});
         } else {
           parameter.data = expert.requestData;
         }
@@ -339,7 +356,7 @@ export default function () {
         }
         parameter.headers['Content-Type'] = 'application/x-www-form-urlencoded';
         parameter.data = JSON.parse(expert.requestData);
-        formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
+        await formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
         break;
       }
       case "form-data": {
@@ -348,7 +365,7 @@ export default function () {
         }
         parameter.headers['Content-Type'] = 'multipart/form-data';
         parameter.data = JSON.parse(expert.requestData || "{}");
-        formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
+        await formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
 
         const fileOverwriteKeys = [];
         for (let key in optionInfoMap.infoMap) {
@@ -367,7 +384,7 @@ export default function () {
             url: optionInfo.value + '',
             responseType: "stream",
           }
-          handleReqPlatformProxyConfig({ctx, config, session, parameter: fileParameter})
+          handleReqPlatformProxyConfig({ctx, config, session, parameter: fileParameter});
 
           const fileRes = await axios(fileParameter);
           let tmpFilePath = await Files.tmpFile();
@@ -400,7 +417,7 @@ export default function () {
     const optionInfoMap = await handleOptionInfos({source, argv});
 
     const parameter: AxiosRequestConfig = {
-      url: formatOption({content: source.sourceUrl, optionInfoMap, session: argv.session}),
+      url: await formatOption({content: source.sourceUrl, optionInfoMap, session: argv.session}),
       method: source.requestMethod,
     };
     handleReqConfigProxyConfig({ctx, config, parameter});
@@ -434,7 +451,7 @@ export default function () {
     presetConstantPoolFnArg = '{' + Object.keys(presetConstantPool).join(',') + '}={}';
   }
 
-  function initPresetFns({config}: { config: Config }) {
+  function initPresetFns({ctx, config}: { ctx: Context, config: Config }) {
     if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
       return;
     }
@@ -443,10 +460,10 @@ export default function () {
         return
       }
       const fn =
-        Function(
-          '{crypto,OTPAuth}', presetConstantPoolFnArg, presetFn.args, presetFn.body
+        (presetFn.async ? AsyncFunction : Function)(
+          '{crypto,OTPAuth,http}', presetConstantPoolFnArg, presetFn.args, presetFn.body
         );
-      presetFnPool[presetFn.name] = fn.bind(fn, {crypto, OTPAuth}, presetConstantPool ?? {});
+      presetFnPool[presetFn.name] = fn.bind(fn, {crypto, OTPAuth, http: ctx.http}, presetConstantPool ?? {});
     });
     presetFnPoolFnArg = '{' + Object.keys(presetFnPool).join(',') + '}={}';
   }
@@ -456,7 +473,7 @@ export default function () {
     config: Config
   }) {
     initPresetConstants({ctx, config});
-    initPresetFns({config});
+    initPresetFns({ctx, config});
   }
 
   function disposeHandleReq() {

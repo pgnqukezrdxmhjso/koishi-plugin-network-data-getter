@@ -68,6 +68,7 @@ export interface PresetConstant {
 }
 
 export interface PresetFn {
+  async: boolean;
   name: string;
   args: string;
   body: string;
@@ -173,7 +174,7 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.union([
                 Schema.object({
                   type: Schema.const('boolean').required(),
-                  value: Schema.boolean().default(true),
+                  value: Schema.boolean(),
                 }),
                 Schema.object({
                   type: Schema.const('string'),
@@ -191,6 +192,7 @@ export const Config: Schema<Config> = Schema.intersect([
               ])
             ])).description('預設常量，可在後續預設函式、配置中使用').collapse(),
             presetFns: Schema.array(Schema.object({
+              async: Schema.boolean().description('非同步函式(在後續的使用中需要在非同步函式前書寫await)').default(false),
               name: Schema.string().description('函式名').required(),
               args: Schema.string().description('引數; 例如 a,b'),
               body: Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
@@ -198,7 +200,8 @@ export const Config: Schema<Config> = Schema.intersect([
               '預設函式，可在後續配置中使用  \n' +
               '可使用的模組: 變數名  \n' +
               '[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n' +
-              '[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n'
+              '[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n' +
+              '[http](https://koishi.chat/zh-CN/plugins/develop/http.html): http  \n'
             ).collapse(),
           }),
         ])

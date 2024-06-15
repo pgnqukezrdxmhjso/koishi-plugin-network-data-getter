@@ -13,6 +13,9 @@ const KoishiUtil = {
         return;
       }
       next = res.next;
+      if (!(res.data instanceof Array)) {
+        return
+      }
       for (const item of res.data) {
         if (await forFn(item) === false) {
           return;
