@@ -30,7 +30,7 @@ const Files = {
       return newName;
     }
     let readStream = createReadStream(tmpFilePath);
-    const fileType = await (await LoadFileType()).fileTypeFromStream(readStream);
+    const fileType = await (await LoadFileType()).fileTypeFromStream(readStream as any);
     readStream.destroy();
     if (!fileType) {
       return tmpFilePath;
@@ -44,6 +44,13 @@ const Files = {
     const hash = createHash('md5');
     await pipeline(readStream, hash);
     return hash.digest('hex');
+  },
+  async getFileNameByBlob(blob: Blob) {
+    const fileType = await (await LoadFileType()).fileTypeFromBlob(blob);
+    const hash = createHash('md5');
+    await pipeline(blob.stream(), hash);
+    const md5 = hash.digest('hex');
+    return md5 + '.' + (fileType?.ext || '')
   }
 }
 export default Files;

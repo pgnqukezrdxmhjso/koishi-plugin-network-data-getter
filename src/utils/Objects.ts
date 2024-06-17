@@ -5,6 +5,12 @@ const Objects = {
   isNotNull(obj: any) {
     return !Objects.isNull(obj);
   },
+  isEmpty(obj: any) {
+    return Objects.isNull(obj) || Object.keys(obj).length < 1;
+  },
+  isNotEmpty(obj: any) {
+    return !Objects.isEmpty(obj);
+  },
   async thoroughForEach(obj: any, fn: (value: any, key: string, obj: any, keys: string[], root: any) => Promise<void>, keys: string[] = [], root?: any) {
     if (!root) {
       root = obj;

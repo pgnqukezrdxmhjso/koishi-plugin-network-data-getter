@@ -1,4 +1,4 @@
-import {Dict, Schema} from 'koishi'
+import {Dict, HTTP, Schema} from 'koishi'
 import fs from "node:fs";
 import path from "node:path";
 
@@ -6,7 +6,6 @@ import GeneratePresetFns from './GeneratePresetFns.js'
 
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
-export type RequestMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'TRACE' | 'PATCH' | 'PURGE' | 'LINK' | 'UNLINK'
 export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 export type OptionValue = boolean | string | number;
@@ -35,7 +34,8 @@ export interface SourceExpert {
   commandOptions: CommandOption[];
   requestHeaders: Dict<string, string>;
   requestDataType: RequestDataType;
-  requestData?: string;
+  requestRaw?: string;
+  requestForm?: Dict<string, string>;
   requestFormFiles?: Dict<string, string>;
   requestJson?: boolean;
   proxyAgent?: string;
@@ -48,7 +48,7 @@ export interface RandomSource {
   reverseGettingTips?: boolean;
   recall?: number;
   sourceUrl: string;
-  requestMethod: RequestMethod;
+  requestMethod: HTTP.Method;
   expertMode: boolean;
   expert?: SourceExpert;
   sendType: SendType;
@@ -218,7 +218,7 @@ export const Config: Schema<Config> = Schema.intersect([
         reverseGettingTips: Schema.boolean().description('對獲取中提示狀態取反').default(false),
         recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
         sourceUrl: Schema.string().role('link').description('請求地址').required(),
-        requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
+        requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
       }),
       Schema.object({
         dataType: Schema.union([
@@ -348,17 +348,17 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.union([
               Schema.object({
                 requestDataType: Schema.const('form-data').required(),
-                requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
+                requestForm: Schema.dict(String).role('table').description('請求資料'),
                 requestFormFiles: Schema.dict(Schema.path()).description('請求檔案').default({}),
               }),
               Schema.object({
                 requestDataType: Schema.const('x-www-form-urlencoded').required(),
-                requestData: Schema.string().role('textarea').description('請求資料(請輸入json)').default('{}'),
+                requestForm: Schema.dict(String).role('table').description('請求資料'),
               }),
               Schema.object({
                 requestDataType: Schema.const('raw').required(),
                 requestJson: Schema.boolean().description('請求資料是否為 JSON').default(true),
-                requestData: Schema.string().role('textarea').description('請求資料').default(''),
+                requestRaw: Schema.string().role('textarea').description('請求資料').default(''),
               }),
               Schema.object({} as any)
             ]),

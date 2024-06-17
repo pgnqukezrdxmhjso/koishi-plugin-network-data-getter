@@ -1,5 +1,4 @@
-import {Argv, Command, Context} from 'koishi';
-import axios from "axios";
+import {Argv, Command, Context, HTTP} from 'koishi';
 import {Config} from './config';
 import {logger} from './logger';
 import Core from "./Core";
@@ -120,7 +119,7 @@ const cmdConfig: Command.Config = {
   checkUnknown: true,
   checkArgCount: true,
   handleError: (err, {command}) => {
-    if (axios.isAxiosError(err)) {
+    if (HTTP.Error.is(err)) {
       logger.error(err.code, err.stack);
     } else {
       logger.error(err);

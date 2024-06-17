@@ -1,19 +1,20 @@
 import fs from "node:fs";
-import {Argv, Context} from "koishi";
-import axios, {AxiosResponse} from "axios";
+import {Argv, Context, HTTP} from "koishi";
 import {Config, RandomSource} from "./config";
 import {logger} from "./logger";
 import {parseSource} from "./split";
 import Send from "./Send";
-import HandleReq from "./HandleReq";
+import CmdReq from "./CmdReq";
+import {Writable, Readable} from "node:stream";
 
 
 export interface WorkData {
   tempFiles: string[];
+  streams: (Writable | Readable)[];
 }
 
 export default function () {
-  const {handleReq, initHandleReq, disposeHandleReq} = HandleReq();
+  const {cmdReq, initCmdReq, disposeCmdReq} = CmdReq();
   const {clearRecalls, sendSource} = Send();
 
   async function send({ctx, config, source, argv}: {
@@ -31,22 +32,27 @@ export default function () {
     }
 
     const workData: WorkData = {
-      tempFiles: []
+      tempFiles: [],
+      streams: []
     };
 
     try {
-      const res: AxiosResponse = await axios(await handleReq({
+
+      const res: HTTP.Response = await cmdReq({
         ctx, config, source, argv, workData
-      }));
+      });
       if (res.status > 300 || res.status < 200) {
         const msg = JSON.stringify(res.data);
         throw new Error(`${msg} (${res.statusText})`);
       }
 
-      const elements = parseSource(res,  source);
+      const elements = parseSource(res, source);
       await sendSource(session, source, elements);
 
     } finally {
+      workData.streams.forEach(stream => {
+        !stream.closed && stream.destroy();
+      })
       workData.tempFiles.forEach(file => {
         fs.rm(file, () => {
         });
@@ -58,12 +64,12 @@ export default function () {
     ctx: Context,
     config: Config
   }) {
-    initHandleReq({ctx, config});
+    initCmdReq({ctx, config});
   }
 
   function onDispose() {
     clearRecalls();
-    disposeHandleReq();
+    disposeCmdReq();
   }
 
   return {send, initConfig, onDispose};

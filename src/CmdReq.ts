@@ -1,11 +1,8 @@
-import {pipeline} from "node:stream/promises";
 import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
-import {Channel, GuildMember} from "@satorijs/protocol/src";
-import {Argv, Context, Element, Session} from "koishi";
-import {HttpsProxyAgent} from "https-proxy-agent";
-import axios, {AxiosRequestConfig} from "axios";
+import {Argv, Context, Element, HTTP, Session} from "koishi";
+import {Channel, GuildMember} from "@satorijs/protocol";
 import * as OTPAuth from "otpauth";
 
 import {CommandArg, CommandOption, Config, OptionValue, ProxyConfig, RandomSource} from "./config";
@@ -37,83 +34,75 @@ const AsyncFunction: FunctionConstructor = (async () => 0).constructor as Functi
 
 export default function () {
 
-  const httpsProxyAgentPool: Record<string, HttpsProxyAgent<string>> = {};
   const presetConstantPool: Record<string, OptionValue> = {};
   let presetConstantPoolFnArg = '{}={}';
 
   const presetFnPool: Record<string, Function> = {};
   let presetFnPoolFnArg = '{}={}';
 
-  function getHttpsProxyAgent(proxyAgent: string): HttpsProxyAgent<string> {
-    if (!httpsProxyAgentPool[proxyAgent]) {
-      httpsProxyAgentPool[proxyAgent] = new HttpsProxyAgent(proxyAgent);
-    }
-    return httpsProxyAgentPool[proxyAgent];
-  }
+  let cmdHttpClient: HTTP;
+  const platformHttpClientPool: Record<string, HTTP> = {};
 
-  function handleProxyAgent(parameter: AxiosRequestConfig, proxyAgent: string) {
-    if (Strings.isBlank(proxyAgent)) {
-      return;
-    }
-    if ((/^http:/).test(parameter.url)) {
-      parameter.httpAgent = getHttpsProxyAgent(proxyAgent);
-      return;
-    }
-    parameter.httpsAgent = getHttpsProxyAgent(proxyAgent);
-  }
 
-  function handleProxyConfig({ctx, proxyConfig, parameter}: {
+  function buildHttpClient({ctx, proxyConfig}: {
     ctx: Context,
     proxyConfig: ProxyConfig,
-    parameter: AxiosRequestConfig,
-  }) {
+  }): HTTP {
     switch (proxyConfig.proxyType) {
       case "NONE": {
-        parameter.timeout = proxyConfig.timeout;
-        break;
-      }
-      case "GLOBAL": {
-        parameter.timeout = ctx.http?.config?.timeout;
-        handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
-        break;
+        return ctx.http.extend({
+          timeout: proxyConfig.timeout,
+          ...{proxyAgent: undefined}
+        });
       }
       case "MANUAL": {
-        parameter.timeout = proxyConfig.timeout;
-        handleProxyAgent(parameter, proxyConfig.proxyAgent);
-        break;
+        return ctx.http.extend({
+          timeout: proxyConfig.timeout,
+          ...{proxyAgent: proxyConfig.proxyAgent}
+        });
+      }
+      case "GLOBAL":
+      default: {
+        return ctx.http;
       }
     }
   }
 
-  function handleReqConfigProxyConfig({ctx, config, parameter}: {
+  function getCmdHttpClient({ctx, config, source}: {
     ctx: Context,
     config: Config,
-    parameter: AxiosRequestConfig,
-  }) {
-    const expert = config.expert;
-    if (!config.expertMode || !expert) {
-      parameter.timeout = ctx.http?.config?.timeout;
-      handleProxyAgent(parameter, ctx.http?.config?.['proxyAgent']);
-      return;
+    source: RandomSource,
+  }): HTTP {
+    if (!cmdHttpClient) {
+      const proxyConfig: ProxyConfig = (config.expertMode && config.expert) ? config.expert : {proxyType: 'GLOBAL'};
+      cmdHttpClient = buildHttpClient({ctx, proxyConfig})
     }
-    handleProxyConfig({ctx, proxyConfig: expert, parameter});
+
+    if (!source.expertMode || Strings.isBlank(source.expert?.proxyAgent)) {
+      return cmdHttpClient;
+    }
+
+    return cmdHttpClient.extend({
+      ...{proxyAgent: source.expert.proxyAgent} as any
+    });
   }
 
-  function handleReqPlatformProxyConfig({ctx, config, session, parameter}: {
+  function getPlatformHttpClient({ctx, config, session}: {
     ctx: Context,
     config: Config,
     session: Session,
-    parameter: AxiosRequestConfig,
-  }) {
+  }): HTTP {
     if (!config.expertMode) {
-      return;
+      return ctx.http;
     }
-    const platformResourceProxy = config.expert?.platformResourceProxyList
-      ?.find(platformResourceProxy => platformResourceProxy.name === session.platform);
-    if (!platformResourceProxy) {
-      return;
+    if (!platformHttpClientPool[session.platform]) {
+      const platformResourceProxy = config.expert?.platformResourceProxyList
+        ?.find(platformResourceProxy => platformResourceProxy.name === session.platform);
+      platformHttpClientPool[session.platform] =
+        !platformResourceProxy ? ctx.http
+          : buildHttpClient({ctx, proxyConfig: platformResourceProxy});
     }
-    handleProxyConfig({ctx, proxyConfig: platformResourceProxy, parameter})
+    return platformHttpClientPool[session.platform];
   }
 
   async function handleOptionInfoData({optionInfo, option, argv}: {
@@ -197,7 +186,7 @@ export default function () {
       optionInfo.isFileUrl = true;
       for (let attrsKey in element.attrs) {
         if (attrsKey.toLowerCase().includes('file')) {
-          optionInfo.fileName = element.attrs[attrsKey];
+          optionInfo.fileName = (element.attrs[attrsKey] + '').trim();
           break;
         }
       }
@@ -257,7 +246,6 @@ export default function () {
   }): Promise<string> {
     const contentList = [];
     content = content
-      .replace(/\n/g, '\\n')
       .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
         contentList.push(p1);
         return match;
@@ -270,7 +258,7 @@ export default function () {
     for (let i = 0; i < contentList.length; i++) {
       const item = contentList[i];
       resMap[i + '_' + item] = await AsyncFunction(
-        '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + item
+        '$e', presetConstantPoolFnArg, presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + item.replace(/\n/g, '\\n')
       )(
         session.event, presetConstantPool ?? {}, presetFnPool ?? {}, optionInfoMap.map ?? {}
       );
@@ -292,7 +280,7 @@ export default function () {
   }) {
     await Objects.thoroughForEach(obj, async (value, key, obj) => {
       if (typeof value === 'string') {
-        obj[key] = await formatOption({content: obj[key], optionInfoMap, session})
+        obj[key] = await formatOption({content: obj[key], optionInfoMap, session});
       }
     });
 
@@ -311,13 +299,15 @@ export default function () {
       } catch (e) {
       }
     }
+
+    return obj;
   }
 
-  async function handleReqExpert({ctx, config, source, parameter, optionInfoMap, session, workData}: {
+  async function handleReqExpert({ctx, config, source, requestConfig, optionInfoMap, session, workData}: {
     ctx: Context,
     config: Config,
     source: RandomSource,
-    parameter: AxiosRequestConfig,
+    requestConfig: HTTP.RequestConfig,
     optionInfoMap: OptionInfoMap,
     session: Session,
     workData: WorkData
@@ -327,45 +317,55 @@ export default function () {
       return;
     }
 
-    if (Strings.isNotBlank(expert.proxyAgent)) {
-      handleProxyAgent(parameter, expert.proxyAgent);
-    }
-
-    parameter.headers = expert.requestHeaders || {};
-    await formatObjOption({obj: parameter.headers, optionInfoMap, session, compelString: false});
+    requestConfig.headers = {...(expert.requestHeaders || {})};
+    await formatObjOption({obj: requestConfig.headers, optionInfoMap, session, compelString: true});
 
     switch (expert.requestDataType) {
       case "raw": {
-        if (Strings.isBlank(expert.requestData)) {
+        if (Strings.isBlank(expert.requestRaw)) {
           break;
         }
-        if (!parameter.headers['Content-Type'] && !expert.requestJson) {
-          parameter.headers['Content-Type'] = 'text/plain';
-        }
+        // if (!requestConfig.headers['Content-Type'] && !expert.requestJson) {
+        //   requestConfig.headers['Content-Type'] = 'text/plain';
+        // }
         if (expert.requestJson) {
-          parameter.data = JSON.parse(expert.requestData);
-          await formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: false});
+          requestConfig.data = JSON.parse(expert.requestRaw);
+          await formatObjOption({obj: requestConfig.data, optionInfoMap, session, compelString: false});
         } else {
-          parameter.data = expert.requestData;
+          requestConfig.data = await formatOption({
+            content: expert.requestRaw.replace(/\\n/g, '\n'),
+            optionInfoMap,
+            session
+          });
         }
         break;
       }
       case "x-www-form-urlencoded": {
-        if (Strings.isBlank(expert.requestData)) {
+        if (Objects.isEmpty(expert.requestForm)) {
           break;
         }
-        parameter.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        parameter.data = JSON.parse(expert.requestData);
-        await formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
+        // requestConfig.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        requestConfig.data = new URLSearchParams(await formatObjOption({
+          obj: JSON.parse(JSON.stringify(expert.requestForm)),
+          optionInfoMap, session, compelString: true
+        }));
         break;
       }
       case "form-data": {
-        if (Strings.isBlank(expert.requestData) && Object.keys(expert.requestFormFiles).length < 1) {
+        if (Objects.isEmpty(expert.requestForm) && Objects.isEmpty(expert.requestFormFiles)) {
           break;
         }
-        parameter.headers['Content-Type'] = 'multipart/form-data';
-        parameter.data = JSON.parse(expert.requestData || "{}");
-        await formatObjOption({obj: parameter.data, optionInfoMap, session, compelString: true});
+        // requestConfig.headers['Content-Type'] = 'multipart/form-data';
+
+        const form = new FormData();
+        requestConfig.data = form;
+        const data = await formatObjOption({
+          obj: JSON.parse(JSON.stringify(expert.requestForm || "{}")),
+          optionInfoMap, session, compelString: true
+        });
+        for (let key in data) {
+          form.append(key, data[key]);
+        }
 
         const fileOverwriteKeys = [];
         for (let key in optionInfoMap.infoMap) {
@@ -380,34 +380,30 @@ export default function () {
             continue;
           }
 
-          const fileParameter: AxiosRequestConfig = {
-            url: optionInfo.value + '',
-            responseType: "stream",
-          }
-          handleReqPlatformProxyConfig({ctx, config, session, parameter: fileParameter});
+          const platformHttpClient = getPlatformHttpClient({ctx, config, session});
+          const fileRes = await platformHttpClient('get', optionInfo.value + '', {
+            responseType: "blob",
+          });
 
-          const fileRes = await axios(fileParameter);
-          let tmpFilePath = await Files.tmpFile();
-          const writer = fs.createWriteStream(tmpFilePath);
-          await pipeline(fileRes.data, writer);
-          tmpFilePath = await Files.tmpFileMoveBeautifyName(tmpFilePath, optionInfo.fileName);
-          workData.tempFiles.push(tmpFilePath);
-          parameter.data[oKey] = fs.createReadStream(tmpFilePath);
+          form.append(oKey, fileRes.data, optionInfo.fileName || await Files.getFileNameByBlob(fileRes.data));
           fileOverwriteKeys.push(oKey);
         }
+
         for (let key in expert.requestFormFiles) {
           if (fileOverwriteKeys.includes(key)) {
             continue;
           }
           const item = expert.requestFormFiles[key];
-          parameter.data[key] = fs.createReadStream(path.join(ctx.baseDir, item));
+          const filePath = path.join(ctx.baseDir, item);
+          const fileBlob = new Blob([fs.readFileSync(filePath)]);
+          form.append(key, fileBlob, path.parse(filePath).base);
         }
         break;
       }
     }
   }
 
-  async function handleReq({ctx, config, source, argv, workData,}: {
+  async function cmdReq({ctx, config, source, argv, workData}: {
     ctx: Context,
     config: Config,
     source: RandomSource,
@@ -416,14 +412,14 @@ export default function () {
   }) {
     const optionInfoMap = await handleOptionInfos({source, argv});
 
-    const parameter: AxiosRequestConfig = {
-      url: await formatOption({content: source.sourceUrl, optionInfoMap, session: argv.session}),
-      method: source.requestMethod,
-    };
-    handleReqConfigProxyConfig({ctx, config, parameter});
-    await handleReqExpert({ctx, config, source, parameter, optionInfoMap, session: argv.session, workData});
-
-    return parameter;
+    const requestConfig: HTTP.RequestConfig = {};
+    await handleReqExpert({ctx, config, source, requestConfig, optionInfoMap, session: argv.session, workData});
+    const httpClient = getCmdHttpClient({ctx, config, source});
+    return await httpClient(
+      source.requestMethod,
+      await formatOption({content: source.sourceUrl, optionInfoMap, session: argv.session}),
+      requestConfig
+    );
   }
 
   function initPresetConstants({ctx, config}: {
@@ -468,7 +464,7 @@ export default function () {
     presetFnPoolFnArg = '{' + Object.keys(presetFnPool).join(',') + '}={}';
   }
 
-  function initHandleReq({ctx, config}: {
+  function initCmdReq({ctx, config}: {
     ctx: Context,
     config: Config
   }) {
@@ -476,9 +472,10 @@ export default function () {
     initPresetFns({ctx, config});
   }
 
-  function disposeHandleReq() {
-    for (let k in httpsProxyAgentPool) {
-      delete httpsProxyAgentPool[k];
+  function disposeCmdReq() {
+    cmdHttpClient = null;
+    for (let k in platformHttpClientPool) {
+      delete platformHttpClientPool[k];
     }
 
     for (let k in presetConstantPool) {
@@ -493,8 +490,8 @@ export default function () {
   }
 
   return {
-    handleReq,
-    initHandleReq,
-    disposeHandleReq
+    cmdReq,
+    initCmdReq,
+    disposeCmdReq
   }
 }

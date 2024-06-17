@@ -79,7 +79,7 @@ const Umami = {
           headers: {
             'content-type': 'application/json',
             'User-Agent': `Mozilla/5.0 (${Umami.getUserAgentOs()}) Chrome/11.4.5.14`,
-          },
+          }
         }
       );
     }));

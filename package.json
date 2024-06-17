@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "透過掃描API連結返回的資料隨機抽出一條作為圖片或文案傳送，支援自定義指令",
-  "version": "0.1.23",
+  "version": "0.1.26",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
@@ -30,15 +30,15 @@
     "plugin"
   ],
   "peerDependencies": {
-    "koishi": "^4.17.5"
+    "koishi": "^4.17.8",
+    "@koishijs/plugin-http": "^0.5.3",
+    "@satorijs/element": "^3.1.7"
   },
   "dependencies": {
-    "axios": "^1.6.2",
-    "ejs": "^3.1.9",
+    "ejs": "^3.1.10",
     "file-type": "^19.0.0",
-    "https-proxy-agent": "^7.0.4",
-    "node-html-parser": "^6.1.11",
-    "otpauth": "^9.2.4"
+    "node-html-parser": "^6.1.13",
+    "otpauth": "^9.3.1"
   },
   "devDependencies": {
     "@types/ejs": "^3.1.5"

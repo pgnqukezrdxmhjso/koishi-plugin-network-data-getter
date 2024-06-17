@@ -1,12 +1,12 @@
-import {AxiosResponse} from "axios";
-import {RandomSource, SplitType} from "./config";
-import {parseJson, parseObjectToArr} from "./utils";
 import {parse} from 'node-html-parser';
+import {HTTP} from "koishi";
+import {parseJson, parseObjectToArr} from "./utils";
+import {RandomSource, SplitType} from "./config";
 import {logger} from "./logger";
 
 
-const splitMap: { [key in SplitType]: (res: AxiosResponse, source: RandomSource) => string[] } = {
-  json: (res: AxiosResponse, source: RandomSource) => {
+const splitMap: { [key in SplitType]: (res: HTTP.Response, source: RandomSource) => string[] } = {
+  json: (res: HTTP.Response, source: RandomSource) => {
     let data = res.data;
     if (typeof data === 'string') {
       logger.debug('json data is string, try to parse it', data)
@@ -24,23 +24,23 @@ const splitMap: { [key in SplitType]: (res: AxiosResponse, source: RandomSource)
       .filter(s => typeof s === 'string')
       .map(s => s as string)
   },
-  txt: (res: AxiosResponse) => {
+  txt: (res: HTTP.Response) => {
     return (res.data as string).split('\n')
   },
-  html: (res: AxiosResponse, source: RandomSource) => {
+  html: (res: HTTP.Response, source: RandomSource) => {
     const {jquerySelector: selector, attribute} = source
     const root = parse(res.data)
     return Array.from(root.querySelectorAll(selector ?? 'p')).map(e => attribute ? e.getAttribute(attribute) : e.structuredText)
   },
-  plain: (res: AxiosResponse) => {
+  plain: (res: HTTP.Response) => {
     return [JSON.stringify(res.data)];
   },
-  resource: (res: AxiosResponse) => {
-    return [res.request.res.responseUrl];
+  resource: (res: HTTP.Response) => {
+    return [res.url];
   }
 }
 
-export function parseSource(res: AxiosResponse, source: RandomSource): string[] {
+export function parseSource(res: HTTP.Response, source: RandomSource): string[] {
   const parser = splitMap[source.dataType];
   if (!parser) {
     throw new Error(`未知的分隔类型: ${source.dataType}`);

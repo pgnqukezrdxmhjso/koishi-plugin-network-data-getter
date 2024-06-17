@@ -1,4 +1,4 @@
-import {List} from "@satorijs/protocol/src";
+import {List} from "@satorijs/protocol";
 import {logger} from "../logger";
 
 const KoishiUtil = {
