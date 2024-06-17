@@ -1,8 +1,7 @@
 import {Dict, HTTP, Schema} from 'koishi'
-import fs from "node:fs";
-import path from "node:path";
 
 import GeneratePresetFns from './GeneratePresetFns.js'
+import VersionHistory from './VersionHistory'
 
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
@@ -143,7 +142,7 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.intersect([
     Schema.object({
       _versionHistory: Schema.object({
-        _: Schema.never().description(fs.readFileSync(path.join(__dirname, './versionHistory.md')).toString())
+        _: Schema.never().description(VersionHistory)
       }).description('更新歷史').collapse(),
       anonymousStatistics: Schema.boolean().description('匿名資料統計（記錄插件啟用的次數）').default(true),
       gettingTips: Schema.boolean().description('獲取中提示').default(true),
