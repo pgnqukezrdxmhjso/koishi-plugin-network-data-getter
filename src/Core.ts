@@ -2,7 +2,7 @@ import fs from "node:fs";
 import {Argv, Context, HTTP} from "koishi";
 import {Config, RandomSource} from "./config";
 import {logger} from "./logger";
-import {parseSource} from "./split";
+import {cmdResData} from "./CmdResData";
 import Send from "./Send";
 import CmdReq from "./CmdReq";
 import {Writable, Readable} from "node:stream";
@@ -46,8 +46,8 @@ export default function () {
         throw new Error(`${msg} (${res.statusText})`);
       }
 
-      const elements = parseSource(res, source);
-      await sendSource(session, source, elements);
+      const resData = cmdResData(res, source);
+      await sendSource(session, source, resData);
 
     } finally {
       workData.streams.forEach(stream => {

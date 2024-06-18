@@ -4,7 +4,6 @@
 
 透過多行文字連結隨機抽出一條作為圖片或文案傳送，支援自定義指令
 
-
 ## 功能介紹
 
 目前支援的資料解析型別:
@@ -13,7 +12,7 @@
 - 多行文字
 - 資源 (圖片/影片/音訊等)
 - HTML
-- 源資料
+- JSONRaw
 
 目前支援的傳送型別:
 
@@ -48,7 +47,8 @@ https://google.com/search?q=<%=$0%>
 https://google.com/search?q=<%=$0%>&safe=<%=$1%>
 ```
 
-當你的指令為 `google hello true` 時，插件會將 `<%=$0%>` 替換為 `hello`，`<%=$1%>` 替換為 `true`，併傳送到 `https://google.com/search?q=hello&safe=true`。
+當你的指令為 `google hello true` 時，插件會將 `<%=$0%>` 替換為 `hello`，`<%=$1%>` 替換為 `true`
+，併傳送到 `https://google.com/search?q=hello&safe=true`。
 
 ---
 
@@ -136,53 +136,53 @@ json_key: 需要掃描的key, 相當於在js中獲取json數值時的引用 + �
 
 ```json
 [
-    {
-        "id": "_5degoesxi",
-        "question": "What would you like to practice today?",
-        "possible_answers": [
-            {
-                "label": "HTML & CSS",
-                "action": {
-                    "key": "lesson_category",
-                    "type": "html-css"
-                }
-            },
-            {
-                "label": "General Typing",
-                "action": {
-                    "key": "lesson_category",
-                    "type": "general"
-                }
-            }
-        ]
-    },
-    {
-        "id": "_zvcr8k6sq",
-        "question": "Choose your difficult level.",
-        "possible_answers": [
-            {
-                "label": "Easy",
-                "action": {
-                    "key": "difficulty",
-                    "type": "easy"
-                }
-            },
-            {
-                "label": "Medium",
-                "action": {
-                    "key": "difficulty",
-                    "type": "medium"
-                }
-            },
-            {
-                "label": "Hard",
-                "action": {
-                    "key": "difficulty",
-                    "type": "hard"
-                }
-            }
-        ]
-    }
+  {
+    "id": "_5degoesxi",
+    "question": "What would you like to practice today?",
+    "possible_answers": [
+      {
+        "label": "HTML & CSS",
+        "action": {
+          "key": "lesson_category",
+          "type": "html-css"
+        }
+      },
+      {
+        "label": "General Typing",
+        "action": {
+          "key": "lesson_category",
+          "type": "general"
+        }
+      }
+    ]
+  },
+  {
+    "id": "_zvcr8k6sq",
+    "question": "Choose your difficult level.",
+    "possible_answers": [
+      {
+        "label": "Easy",
+        "action": {
+          "key": "difficulty",
+          "type": "easy"
+        }
+      },
+      {
+        "label": "Medium",
+        "action": {
+          "key": "difficulty",
+          "type": "medium"
+        }
+      },
+      {
+        "label": "Hard",
+        "action": {
+          "key": "difficulty",
+          "type": "hard"
+        }
+      }
+    ]
+  }
 ]
 ```
 
@@ -201,9 +201,12 @@ json_key: "[].possible_answers[].action.type"
 
 ```json
 {
-    "abc": {
-        "xyz": ["foo", "bar"]
-    }
+  "abc": {
+    "xyz": [
+      "foo",
+      "bar"
+    ]
+  }
 }
 ```
 
@@ -219,16 +222,16 @@ __注意: 若 `json_key` 填寫不當有可能會導致插件報錯。__
 
 ### EJS
 
-資料型別選擇``後設資料``，填入``EJS模板``即可。
+資料型別選擇``JSONRaw``，填入``EJS模板``即可。
 
 假設你的返回資料為以下的json:
 
 ```json
 {
-    "name": "morpheus",
-    "job": "leader",
-    "id": "583",
-    "createdAt": "2023-11-13T06:30:39.982Z"
+  "name": "morpheus",
+  "job": "leader",
+  "id": "583",
+  "createdAt": "2023-11-13T06:30:39.982Z"
 }
 ```
 
@@ -236,23 +239,23 @@ EJS模板則可輸入:
 
 ```yml
 ejs_template: |-
-    <p> 成功建立 name: <%= data.name %>, job: <%= data.job %></p>
-    <p> id: <%= data.id %> </p>
+  <p> 成功建立 name: <%= data.name %>, job: <%= data.job %></p>
+  <p> id: <%= data.id %> </p>
 ```
 
 插件將會根據模板輸出迴應。
 
 
 ---
+
 # VersionHistory
 
 ### TODO
 
-* 新增全域性變數池功能(或許是直接用快取服務
-* 增加資料處理器功能替代原本的資料返回型別額外配置
+* 預設函式新增全域性變數池功能(或許是直接用快取服務
+* 增加資料處理器功能，對資料進行額外的自定義處理
 * 隨機功能修改為資料處理器的選項
 * 傳送型別修改為渲染型別
-* 渲染型別預設傳送基礎型別
 * 渲染型別 `EJS 模板` 支援預設函式、預設常量、請求引數
 * 增加 `渲染模板系列` `Open Graph Protocol` `rss` `指令鏈` 渲染型別
 * 渲染模板系列 `svg` `psd` `htmlCode` `htmlUrl`
@@ -262,6 +265,10 @@ ejs_template: |-
 * 使用請求結果中的url資料傳送資源時，下載url後轉base64傳送
 * 增加定時執行指令功能（計劃任務、間隔）
 * 定時執行指令功能，先使用head請求判斷差異
+
+### 0.1.31
+
+* 修復去除axios後導致的JSONRaw型別解析bug
 
 ### 0.1.29
 

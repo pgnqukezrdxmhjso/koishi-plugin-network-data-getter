@@ -226,7 +226,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.const('txt').description('多行文字'),
           Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
           Schema.const('html').description('HTML 文字'),
-          Schema.const('plain').description('後設資料, 供EJS模板使用')
+          Schema.const('plain').description('JSONRaw')
         ]).description('資料返回型別').default('txt'),
       }),
       Schema.union([

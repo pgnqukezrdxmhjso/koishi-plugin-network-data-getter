@@ -3,10 +3,12 @@ import {RandomSource, SendType} from "./config";
 import {getRandom} from "./utils";
 import {render} from 'ejs'
 import {logger} from "./logger";
+import {ResData} from "./CmdResData";
+import Strings from "./utils/Strings";
 
 interface SendMechanic {
-  canSend: (s: string, source: RandomSource) => boolean
-  toJsx: (s: string, source: RandomSource) => (any | Fragment)
+  canSend?: (s: string) => boolean
+  toJsx: (resData: ResData, source: RandomSource) => (any | Fragment)
 }
 
 export default function () {
@@ -15,39 +17,38 @@ export default function () {
   const sendMap: { [key in SendType]: SendMechanic } = {
     'text': {
       canSend: (s: string) => s.length > 0,
-      toJsx: (s: string) => s
+      toJsx: (resData: ResData) => resData.text
     },
 
     'image': {
       canSend: (s: string) => s.startsWith('http') || s.startsWith('data:image/'),
-      toJsx: (s: string) => <img url={s} alt=''/>
+      toJsx: (resData: ResData) => <img url={resData.text} alt=''/>
     },
 
     'audio': {
       canSend: (s: string) => s.startsWith('http') || s.startsWith('data:audio/'),
-      toJsx: (s: string) => <audio url={s}/>
+      toJsx: (resData: ResData) => <audio url={resData.text}/>
     },
 
     'video': {
       canSend: (s: string) => s.startsWith('http') || s.startsWith('data:video/'),
-      toJsx: (s: string) => <video url={s}/>
+      toJsx: (resData: ResData) => <video url={resData.text}/>
     },
 
     'file': {
       canSend: (s: string) => s.startsWith('http') || s.startsWith('data:'),
-      toJsx: (s: string) => <file url={s}/>
+      toJsx: (resData: ResData) => <file url={resData.text}/>
     },
 
     'ejs': {
-      canSend: (s: string) => true,
-      toJsx: (s: string, source: RandomSource) => {
+      toJsx: (resData: ResData, source: RandomSource) => {
         try {
-          const data = JSON.parse(s)
+          const data = resData.json;
           const {ejsTemplate} = source;
           if (ejsTemplate) {
             return render(ejsTemplate, {data})
           } else {
-            return s
+            return JSON.stringify(data)
           }
         } catch (err) {
           logger.error('Error while parsing ejs data and json:')
@@ -59,25 +60,27 @@ export default function () {
   }
 
 
-  async function sendSource(session: Session<never, never, Context>, source: RandomSource, elements: string[]) {
+  async function sendSource(session: Session<never, never, Context>, source: RandomSource, resData: ResData) {
     try {
       const sendMechanic = sendMap[source.sendType]
       if (!sendMechanic) {
         await session.send(`不支持的发送类型: ${source.sendType}`)
         return
       }
-      const filtered = elements.filter(s => sendMechanic.canSend(s, source))
-      logger.info(`源数据量: ${elements.length}, 发送数据量: ${filtered.length}`)
-      const selected = getRandom(filtered)
-      if (selected && selected.length > 0) {
-        const [msg] = await session.send(sendMechanic.toJsx(selected, source))
-        if (source.recall > 0) {
-          logger.debug(`设置${source.recall}分钟后撤回`)
-          const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000)
-          recalls.add(timeout)
+      if (resData.texts) {
+        const selected = getRandom(resData.texts.filter(s => sendMechanic.canSend(s)));
+        if (Strings.isEmpty(selected)) {
+          await session.send('没有符合条件的结果');
+          return;
         }
-      } else {
-        await session.send('没有符合条件的结果')
+        resData.text = selected;
+      }
+
+      const [msg] = await session.send(sendMechanic.toJsx(resData, source))
+      if (source.recall > 0) {
+        logger.debug(`设置${source.recall}分钟后撤回`)
+        const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000)
+        recalls.add(timeout)
       }
     } catch (err) {
       logger.error(err)
