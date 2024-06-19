@@ -1,17 +1,9 @@
-import fs from "node:fs";
 import {Argv, Context, HTTP} from "koishi";
-import {Config, RandomSource} from "./config";
+import {Config, CmdSource} from "./config";
 import {logger} from "./logger";
 import {cmdResData} from "./CmdResData";
 import Send from "./Send";
 import CmdReq from "./CmdReq";
-import {Writable, Readable} from "node:stream";
-
-
-export interface WorkData {
-  tempFiles: string[];
-  streams: (Writable | Readable)[];
-}
 
 export default function () {
   const {cmdReq, initCmdReq, disposeCmdReq} = CmdReq();
@@ -20,7 +12,7 @@ export default function () {
   async function send({ctx, config, source, argv}: {
     ctx: Context,
     config: Config,
-    source: RandomSource,
+    source: CmdSource,
     argv: Argv,
   }) {
     logger.debug('args: ', argv.args);
@@ -31,33 +23,16 @@ export default function () {
       await session.send(`獲取 ${source.command} 中，請稍候...`);
     }
 
-    const workData: WorkData = {
-      tempFiles: [],
-      streams: []
-    };
-
-    try {
-
-      const res: HTTP.Response = await cmdReq({
-        ctx, config, source, argv, workData
-      });
-      if (res.status > 300 || res.status < 200) {
-        const msg = JSON.stringify(res.data);
-        throw new Error(`${msg} (${res.statusText})`);
-      }
-
-      const resData = cmdResData(res, source);
-      await sendSource(session, source, resData);
-
-    } finally {
-      workData.streams.forEach(stream => {
-        !stream.closed && stream.destroy();
-      })
-      workData.tempFiles.forEach(file => {
-        fs.rm(file, () => {
-        });
-      });
+    const res: HTTP.Response = await cmdReq({
+      ctx, config, source, argv
+    });
+    if (res.status > 300 || res.status < 200) {
+      const msg = JSON.stringify(res.data);
+      throw new Error(`${msg} (${res.statusText})`);
     }
+
+    const resData = cmdResData(res, source);
+    await sendSource(session, source, resData);
   }
 
   function initConfig({ctx, config}: {

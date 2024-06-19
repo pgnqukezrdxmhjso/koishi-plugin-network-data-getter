@@ -1,7 +1,7 @@
 import {parse} from 'node-html-parser';
 import {HTTP} from "koishi";
 import {parseJson, parseObjectToArr} from "./utils";
-import {RandomSource, SplitType} from "./config";
+import {CmdSource, SplitType} from "./config";
 
 export interface ResData {
   json?: {} | [];
@@ -10,12 +10,12 @@ export interface ResData {
 }
 
 type BaseProcessorMap = {
-  [key in SplitType]: (res: HTTP.Response, source: RandomSource) => ResData
+  [key in SplitType]: (res: HTTP.Response, source: CmdSource) => ResData
 }
 
 
 const baseProcessorMap: BaseProcessorMap = {
-  json: (res: HTTP.Response, source: RandomSource) => {
+  json: (res: HTTP.Response, source: CmdSource) => {
     let data = res.data;
     if (typeof data === 'string') {
       data = JSON.parse(data);
@@ -37,7 +37,7 @@ const baseProcessorMap: BaseProcessorMap = {
       texts: (res.data as string).split('\n')
     }
   },
-  html: (res: HTTP.Response, source: RandomSource) => {
+  html: (res: HTTP.Response, source: CmdSource) => {
     const {jquerySelector: selector, attribute} = source
     const root = parse(res.data)
     return {
@@ -46,7 +46,7 @@ const baseProcessorMap: BaseProcessorMap = {
   },
   resource: (res: HTTP.Response) => {
     return {
-      texts: [res.url]
+      text: `data:${res.headers.get('Content-Type')};base64,` + Buffer.from(res.data).toString('base64')
     };
   },
   plain: (res: HTTP.Response) => {
@@ -57,7 +57,7 @@ const baseProcessorMap: BaseProcessorMap = {
 
 }
 
-export function cmdResData(res: HTTP.Response, source: RandomSource): ResData {
+export function cmdResData(res: HTTP.Response, source: CmdSource): ResData {
   const parser = baseProcessorMap[source.dataType];
   if (!parser) {
     throw new Error(`未知的分隔类型: ${source.dataType}`);

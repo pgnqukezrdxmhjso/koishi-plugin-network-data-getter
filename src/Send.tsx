@@ -1,5 +1,5 @@
 import {Context, Fragment, Session} from "koishi";
-import {RandomSource, SendType} from "./config";
+import {CmdSource, SendType} from "./config";
 import {getRandom} from "./utils";
 import {render} from 'ejs'
 import {logger} from "./logger";
@@ -8,7 +8,7 @@ import Strings from "./utils/Strings";
 
 interface SendMechanic {
   canSend?: (s: string) => boolean
-  toJsx: (resData: ResData, source: RandomSource) => (any | Fragment)
+  toJsx: (resData: ResData, source: CmdSource) => (any | Fragment)
 }
 
 export default function () {
@@ -41,7 +41,7 @@ export default function () {
     },
 
     'ejs': {
-      toJsx: (resData: ResData, source: RandomSource) => {
+      toJsx: (resData: ResData, source: CmdSource) => {
         try {
           const data = resData.json;
           const {ejsTemplate} = source;
@@ -60,7 +60,7 @@ export default function () {
   }
 
 
-  async function sendSource(session: Session<never, never, Context>, source: RandomSource, resData: ResData) {
+  async function sendSource(session: Session<never, never, Context>, source: CmdSource, resData: ResData) {
     try {
       const sendMechanic = sendMap[source.sendType]
       if (!sendMechanic) {

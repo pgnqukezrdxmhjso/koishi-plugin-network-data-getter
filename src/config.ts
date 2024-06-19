@@ -41,7 +41,7 @@ export interface SourceExpert {
   proxyAgent?: string;
 }
 
-export interface RandomSource {
+export interface CmdSource {
   command: string;
   alias: string[];
   desc: string;
@@ -80,12 +80,13 @@ export interface ProxyConfig {
   timeout?: number;
 }
 
-export interface PlatformResourceProxy extends ProxyConfig {
+export interface PlatformResource extends ProxyConfig {
   name: string;
+  requestHeaders: Dict<string, string>;
 }
 
 export interface ConfigExpert extends ProxyConfig {
-  platformResourceProxyList?: PlatformResourceProxy[];
+  platformResourceList?: PlatformResource[];
   presetConstants: PresetConstant[];
   presetFns: PresetFn[];
 }
@@ -95,7 +96,7 @@ export interface Config {
   gettingTips: boolean;
   expertMode: boolean;
   expert?: ConfigExpert;
-  sources: RandomSource[];
+  sources: CmdSource[];
 }
 
 function unionOrObject(
@@ -155,12 +156,13 @@ export const Config: Schema<Config> = Schema.intersect([
         expert: Schema.intersect([
           ...proxyConfigSchema(),
           Schema.object({
-            platformResourceProxyList: Schema.array(Schema.intersect([
+            platformResourceList: Schema.array(Schema.intersect([
               Schema.object({
                 name: Schema.string().description('平臺名').required(),
+                requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
               }),
               ...proxyConfigSchema(),
-            ])).description('平臺資源下載代理(平臺指discord、telegram等,資源指指令中的圖片、影片、音訊、檔案)').collapse(),
+            ])).description('平臺資源下載配置(平臺指discord、telegram等,資源指指令中的圖片、影片、音訊、檔案)').collapse(),
             presetConstants: Schema.array(Schema.intersect([
               Schema.object({
                 name: Schema.string().description('常量名').required(),
@@ -243,12 +245,12 @@ export const Config: Schema<Config> = Schema.intersect([
       ]),
       Schema.object({
         sendType: Schema.union([
-          Schema.const('image').description('圖片'),
           Schema.const('text').description('文字'),
-          Schema.const('ejs').description('EJS 模板'),
+          Schema.const('image').description('圖片'),
           Schema.const('audio').description('音訊'),
           Schema.const('video').description('影片'),
-          Schema.const('file').description('檔案')
+          Schema.const('file').description('檔案'),
+          Schema.const('ejs').description('EJS 模板'),
         ]).description('傳送型別').default('text'),
       }),
       Schema.union([

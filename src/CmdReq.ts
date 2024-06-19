@@ -5,13 +5,12 @@ import {Argv, Context, Element, HTTP, Session} from "koishi";
 import {Channel, GuildMember} from "@satorijs/protocol";
 import * as OTPAuth from "otpauth";
 
-import {CommandArg, CommandOption, Config, OptionValue, ProxyConfig, RandomSource} from "./config";
+import {CommandArg, CommandOption, Config, OptionValue, ProxyConfig, CmdSource, PlatformResource} from "./config";
 import KoishiUtil from "./utils/KoishiUtil";
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Arrays from "./utils/Arrays";
 import Files from "./utils/Files";
-import {WorkData} from "./Core";
 
 
 type OptionInfoValue = OptionValue | GuildMember | Channel
@@ -30,6 +29,11 @@ interface OptionInfoMap {
   fnArg: string;
 }
 
+interface PlatformHttpClient {
+  client: HTTP;
+  config?: PlatformResource
+}
+
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
 export default function () {
@@ -41,7 +45,7 @@ export default function () {
   let presetFnPoolFnArg = '{}={}';
 
   let cmdHttpClient: HTTP;
-  const platformHttpClientPool: Record<string, HTTP> = {};
+  const platformHttpClientPool: Record<string, PlatformHttpClient> = {};
 
 
   function buildHttpClient({ctx, proxyConfig}: {
@@ -71,7 +75,7 @@ export default function () {
   function getCmdHttpClient({ctx, config, source}: {
     ctx: Context,
     config: Config,
-    source: RandomSource,
+    source: CmdSource,
   }): HTTP {
     if (!cmdHttpClient) {
       const proxyConfig: ProxyConfig = (config.expertMode && config.expert) ? config.expert : {proxyType: 'GLOBAL'};
@@ -91,16 +95,17 @@ export default function () {
     ctx: Context,
     config: Config,
     session: Session,
-  }): HTTP {
+  }): PlatformHttpClient {
     if (!config.expertMode) {
-      return ctx.http;
+      return {client: ctx.http};
     }
     if (!platformHttpClientPool[session.platform]) {
-      const platformResourceProxy = config.expert?.platformResourceProxyList
-        ?.find(platformResourceProxy => platformResourceProxy.name === session.platform);
-      platformHttpClientPool[session.platform] =
-        !platformResourceProxy ? ctx.http
-          : buildHttpClient({ctx, proxyConfig: platformResourceProxy});
+      const platformResource =
+        config.expert?.platformResourceList?.find(platformResource => platformResource.name === session.platform);
+      platformHttpClientPool[session.platform] = {
+        client: !platformResource ? ctx.http : buildHttpClient({ctx, proxyConfig: platformResource}),
+        config: platformResource
+      };
     }
     return platformHttpClientPool[session.platform];
   }
@@ -193,7 +198,7 @@ export default function () {
     }
   }
 
-  async function handleOptionInfos({source, argv}: { source: RandomSource, argv: Argv }): Promise<OptionInfoMap> {
+  async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv }): Promise<OptionInfoMap> {
     const map: Record<string, OptionInfoValue> = {};
     const infoMap: Record<string, OptionInfo> = {};
     const fnArgs = [];
@@ -303,14 +308,13 @@ export default function () {
     return obj;
   }
 
-  async function handleReqExpert({ctx, config, source, requestConfig, optionInfoMap, session, workData}: {
+  async function handleReqExpert({ctx, config, source, requestConfig, optionInfoMap, session}: {
     ctx: Context,
     config: Config,
-    source: RandomSource,
+    source: CmdSource,
     requestConfig: HTTP.RequestConfig,
     optionInfoMap: OptionInfoMap,
     session: Session,
-    workData: WorkData
   }) {
     let expert = source.expert;
     if (!source.expertMode || !expert) {
@@ -325,15 +329,12 @@ export default function () {
         if (Strings.isBlank(expert.requestRaw)) {
           break;
         }
-        // if (!requestConfig.headers['Content-Type'] && !expert.requestJson) {
-        //   requestConfig.headers['Content-Type'] = 'text/plain';
-        // }
         if (expert.requestJson) {
           requestConfig.data = JSON.parse(expert.requestRaw);
           await formatObjOption({obj: requestConfig.data, optionInfoMap, session, compelString: false});
         } else {
           requestConfig.data = await formatOption({
-            content: expert.requestRaw.replace(/\\n/g, '\n'),
+            content: expert.requestRaw,
             optionInfoMap,
             session
           });
@@ -344,9 +345,8 @@ export default function () {
         if (Objects.isEmpty(expert.requestForm)) {
           break;
         }
-        // requestConfig.headers['Content-Type'] = 'application/x-www-form-urlencoded';
         requestConfig.data = new URLSearchParams(await formatObjOption({
-          obj: JSON.parse(JSON.stringify(expert.requestForm)),
+          obj: {...expert.requestForm},
           optionInfoMap, session, compelString: true
         }));
         break;
@@ -355,12 +355,10 @@ export default function () {
         if (Objects.isEmpty(expert.requestForm) && Objects.isEmpty(expert.requestFormFiles)) {
           break;
         }
-        // requestConfig.headers['Content-Type'] = 'multipart/form-data';
-
         const form = new FormData();
         requestConfig.data = form;
         const data = await formatObjOption({
-          obj: JSON.parse(JSON.stringify(expert.requestForm || "{}")),
+          obj: {...(expert.requestForm || {})},
           optionInfoMap, session, compelString: true
         });
         for (let key in data) {
@@ -381,9 +379,14 @@ export default function () {
           }
 
           const platformHttpClient = getPlatformHttpClient({ctx, config, session});
-          const fileRes = await platformHttpClient('get', optionInfo.value + '', {
+          const platformReqConfig: HTTP.RequestConfig = {
             responseType: "blob",
-          });
+          };
+          if (platformHttpClient.config) {
+            platformReqConfig.headers = {...(platformHttpClient.config.requestHeaders || {})};
+            await formatObjOption({obj: platformReqConfig.headers, optionInfoMap, session, compelString: true});
+          }
+          const fileRes = await platformHttpClient.client('get', optionInfo.value + '', platformReqConfig);
 
           form.append(oKey, fileRes.data, optionInfo.fileName || await Files.getFileNameByBlob(fileRes.data));
           fileOverwriteKeys.push(oKey);
@@ -403,17 +406,16 @@ export default function () {
     }
   }
 
-  async function cmdReq({ctx, config, source, argv, workData}: {
+  async function cmdReq({ctx, config, source, argv}: {
     ctx: Context,
     config: Config,
-    source: RandomSource,
+    source: CmdSource,
     argv: Argv,
-    workData: WorkData,
   }) {
     const optionInfoMap = await handleOptionInfos({source, argv});
 
     const requestConfig: HTTP.RequestConfig = {};
-    await handleReqExpert({ctx, config, source, requestConfig, optionInfoMap, session: argv.session, workData});
+    await handleReqExpert({ctx, config, source, requestConfig, optionInfoMap, session: argv.session});
     const httpClient = getCmdHttpClient({ctx, config, source});
     return await httpClient(
       source.requestMethod,
