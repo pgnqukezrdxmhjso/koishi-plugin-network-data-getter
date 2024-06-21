@@ -3,6 +3,7 @@ import {Dict, HTTP, Schema} from 'koishi'
 import GeneratePresetFns from './GeneratePresetFns.js'
 import fs from "node:fs";
 import path from "node:path";
+import {rendered} from "./Renderer";
 
 export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
 export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
@@ -39,6 +40,8 @@ export interface SourceExpert {
   requestFormFiles?: Dict<string, string>;
   requestJson?: boolean;
   proxyAgent?: string;
+  renderedMediaUrlToBase64: boolean;
+  rendererRequestHeaders?: Dict<string, string>;
 }
 
 export interface CmdSource {
@@ -251,7 +254,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.const('video').description('影片'),
           Schema.const('file').description('檔案'),
           Schema.const('ejs').description('EJS 模板'),
-        ]).description('傳送型別').default('text'),
+        ]).description('渲染型別').default('text'),
       }),
       Schema.union([
         Schema.object({
@@ -345,7 +348,11 @@ export const Config: Schema<Config> = Schema.intersect([
                 '**<%= %>** 中允許使用js程式碼與預設函式 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`'
               ),
               requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
-              requestDataType: Schema.union([Schema.const('empty').description('無'), 'form-data', 'x-www-form-urlencoded', 'raw']).description('資料型別').default('empty'),
+              requestDataType:
+                Schema.union([
+                  Schema.const('empty').description('無'),
+                  'form-data', 'x-www-form-urlencoded', 'raw'
+                ]).description('資料型別').default('empty'),
             }),
             Schema.union([
               Schema.object({
@@ -366,11 +373,20 @@ export const Config: Schema<Config> = Schema.intersect([
             ]),
             Schema.object({
               proxyAgent: Schema.string().description('代理地址，本指令獨享'),
-            })
+              renderedMediaUrlToBase64: Schema.boolean().default(true)
+                .description('渲染型別為資源類時自動將url下載後轉base64  \n此配置可使用本插件的代理配置下載資料'),
+            }),
+            Schema.union([
+              Schema.object({
+                renderedMediaUrlToBase64: Schema.const(true),
+                rendererRequestHeaders: Schema.dict(String).role('table').description('渲染資源類請求頭').default({}),
+              }),
+              Schema.object({})
+            ])
           ])
         }),
         Schema.object({} as any),
       ]),
     ]).description('--- \n ---')),
   }).description('指令設定')
-])
+]);

@@ -14,14 +14,14 @@
 - HTML
 - JSONRaw
 
-目前支援的傳送型別:
+目前支援的渲染型別:
 
-- 圖片
 - 文字
-- EJS模板
+- 圖片
 - 音訊
 - 影片
-- 文件
+- 檔案
+- EJS模板
 
 目前支援透過指令傳遞引數:
 
@@ -54,14 +54,14 @@ https://google.com/search?q=<%=$0%>&safe=<%=$1%>
 
 **假設你需要透過 payload 傳輸引數到你的連結**
 
-payload一般用在POST，PUT等請求，你可以在設定中新增 `request_data` 資料，例如:
+payload一般用在POST，PUT等請求，你可以在設定中新增 `requestRaw` 資料，例如:
 
 ```yml
-request_data: '{"name": "<%=$0%>", "age": "<%=$1%>"}'
-request_json: true
+requestRaw: '{"name": "<%=$0%>", "age": "<%=$1%>"}'
+requestJson: true
 ```
 
-__注意: 假設你的資料為JSON，則必須設定 `request_json` 為 `true`__
+__注意: 假設你的資料為JSON，則必須設定 `requestJson` 為 `true`__
 
 ---
 
@@ -72,7 +72,7 @@ __注意: 假設你的資料為JSON，則必須設定 `request_json` 為 `true`_
 今天是瘋狂星期四！！
 ```
 
-則選擇傳送型別為`文字`, 資料返回型別為`多行文字`, 插件便會從這兩句文案中隨機抽選一個返回。
+則選擇渲染型別為`文字`, 資料返回型別為`多行文字`, 插件便會從這兩句文案中隨機抽選一個返回。
 
 ---
 
@@ -83,13 +83,13 @@ https://cdn.xyz/abc.jpg
 https://cdn.xyz/xyz.jpg
 ```
 
-則選擇傳送型別為`圖片`, 資料返回型別為`多行文字`, 插件便會從這兩條圖片連結隨機抽選一張圖片返回。
+則選擇渲染型別為`圖片`, 資料返回型別為`多行文字`, 插件便會從這兩條圖片連結隨機抽選一張圖片返回。
 
 ---
 
 **假設你的連結返回隨機圖片**
 
-則選擇傳送型別為`圖片`, 資料返回型別為`資源`, 插件則會直接把該連結返回的圖片直接傳送。
+則選擇渲染型別為`圖片`, 資料返回型別為`資源`, 插件則會直接把該連結返回的圖片直接傳送。
 
 此型別適用於所有資源，包括影片，音訊，文件等。
 
@@ -100,7 +100,7 @@ https://cdn.xyz/xyz.jpg
 透過 Jquery 提取文字，設定如下
 
 ```yml
-jquery_selector: 提取元素, 相當於 querySelectorAll(value)
+jquerySelector: 提取元素, 相當於 querySelectorAll(value)
 attribute: 獲取元素屬性, 相當於 getAttribute(value)
 ```
 
@@ -116,7 +116,7 @@ attribute: 獲取元素屬性, 相當於 getAttribute(value)
 想獲取僅限 class 中包含 `abc` 的圖片連結，則可用:
 
 ```yml
-jquery_selector: .abc
+jquerySelector: .abc
 attribute: src
 ```
 
@@ -129,7 +129,7 @@ __注意: 提取的 html 文字為 http 請求的文字，不包含js後期注�
 透過字元進行JSON取值，設定如下
 
 ```yml
-json_key: 需要掃描的key, 相當於在js中獲取json數值時的引用 + 支援迭代邏輯 []
+jsonKey: 需要掃描的key, 相當於在js中獲取json數值時的引用 + 支援迭代邏輯 []
 ```
 
 例子如下:
@@ -189,7 +189,7 @@ json_key: 需要掃描的key, 相當於在js中獲取json數值時的引用 + �
 若想獲取所有元素中內 action 的 type, 則使用
 
 ```yml
-json_key: "[].possible_answers[].action.type"
+jsonKey: "[].possible_answers[].action.type"
 ```
 
 `[]` 代表迭代，會提取每個迭代元素的值。
@@ -213,12 +213,12 @@ json_key: "[].possible_answers[].action.type"
 則填入:
 
 ```yml
-json_key: "abc.xyz"
+jsonKey: "abc.xyz"
 ```
 
 就可獲得 `foo`, `bar` 的隨機抽選。
 
-__注意: 若 `json_key` 填寫不當有可能會導致插件報錯。__
+__注意: 若 `jsonKey` 填寫不當有可能會導致插件報錯。__
 
 ### EJS
 
@@ -238,7 +238,7 @@ __注意: 若 `json_key` 填寫不當有可能會導致插件報錯。__
 EJS模板則可輸入:
 
 ```yml
-ejs_template: |-
+ejsTemplate: |-
   <p> 成功建立 name: <%= data.name %>, job: <%= data.job %></p>
   <p> id: <%= data.id %> </p>
 ```
@@ -255,19 +255,23 @@ ejs_template: |-
 * 預設函式新增全域性變數池功能(或許是直接用快取服務
 * 增加資料處理器功能，對資料進行額外的自定義處理
 * 隨機功能修改為資料處理器的選項
-* 傳送型別修改為渲染型別
+* 資源類渲染型別，支援傳送多條資源
 * 渲染型別 `EJS 模板` 支援預設函式、預設常量、請求引數
 * 增加 `渲染模板系列` `Open Graph Protocol` `rss` `指令鏈` 渲染型別
 * 渲染模板系列 `svg` `psd` `htmlCode` `htmlUrl`
 * 渲染網路代理
-* 傳送型別為多媒體時，下載url後轉base64傳送的選項
-* 下載資源時的自定義headers
-* 下載資源時自動設定Referer頭
 * 新增內建預設函式`urlToBase64`
 * 增加定時執行指令功能（計劃任務、間隔）
 * 定時執行指令功能，先使用head請求判斷差異
 * 通過轉發發送內容的選項
 * 支持在插入參數中插入參數中的文件
+
+### 0.1.33
+
+* 傳送型別修改為渲染型別
+* 渲染型別為資源類時，下載url後轉base64的選項
+* 渲染資源類,下載時自動設定`Referer`頭
+* 渲染資源類,下載時的自定義headers
 
 ### 0.1.32
 

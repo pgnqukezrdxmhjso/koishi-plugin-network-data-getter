@@ -57,7 +57,7 @@ const baseProcessorMap: BaseProcessorMap = {
 
 }
 
-export function cmdResData(res: HTTP.Response, source: CmdSource): ResData {
+export function cmdResData(source: CmdSource, res: HTTP.Response): ResData {
   const parser = baseProcessorMap[source.dataType];
   if (!parser) {
     throw new Error(`未知的分隔类型: ${source.dataType}`);

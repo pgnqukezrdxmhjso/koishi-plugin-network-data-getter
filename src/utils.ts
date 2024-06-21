@@ -33,7 +33,3 @@ function loopIter(target: any[], suffix: string[]): any[] {
     }
     return target
 }
-
-export function getRandom<T>(arr: T[]): T {
-    return arr[Math.floor(Math.random() * arr.length)]
-}
