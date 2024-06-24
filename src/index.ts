@@ -1,9 +1,14 @@
+import path from "node:path";
+
 import {Argv, Command, Context, HTTP} from 'koishi';
+// noinspection ES6UnusedImports
+import {} from '@koishijs/plugin-console'
+
+import Strings from "./utils/Strings";
 import {Config} from './config';
 import {logger} from './logger';
-import Core from "./Core";
-import Strings from "./utils/Strings";
 import Umami from "./Umami";
+import Core from "./Core";
 
 export const inject = ['http'];
 export {Config} from './config'
@@ -13,7 +18,11 @@ export const reusable = true;
 // noinspection JSUnusedGlobalSymbols
 export const usage = `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>`
 
+
+let applyCount = 0;
+
 export function apply(ctx: Context, config: Config) {
+  applyCount++;
   Umami.send({
     ctx,
     url: 'plugin_ready',
@@ -22,9 +31,20 @@ export function apply(ctx: Context, config: Config) {
     }
   });
 
+  if (applyCount === 1) {
+    ctx.inject(['console'], (ctx) => {
+      const basePath = path.join(path.parse(__filename).dir, '../');
+      ctx.console.addEntry({
+        dev: path.join(basePath, '/client/index.ts'),
+        prod: path.join(basePath, '/dist'),
+      })
+    });
+  }
+
   const {initConfig, onDispose, send} = Core();
   initConfig({ctx, config});
   ctx.on('dispose', () => {
+    applyCount--;
     onDispose();
   });
 

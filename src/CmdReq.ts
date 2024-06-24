@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import {Argv, Context, HTTP, Session} from "koishi";
+import {Context, HTTP, Session} from "koishi";
 
 import {CmdSource, Config, PlatformResource, ProxyConfig} from "./config";
 import Strings from "./utils/Strings";
