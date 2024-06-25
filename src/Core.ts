@@ -5,7 +5,7 @@ import fs from "node:fs";
 import {Argv, Context, Element, Fragment, HTTP, Session} from "koishi";
 import * as OTPAuth from "otpauth";
 
-import {Config, CmdSource, OptionValue, CommandArg, CommandOption} from "./config";
+import {Config, CmdSource, OptionValue, CommandArg, CommandOption} from "./Config";
 import {cmdResData} from "./CmdResData";
 import Arrays from "./utils/Arrays";
 import {rendered} from "./Renderer";
@@ -14,6 +14,7 @@ import {logger} from "./logger";
 import {Channel, GuildMember} from "@satorijs/protocol";
 import Strings from "./utils/Strings";
 import KoishiUtil from "./utils/KoishiUtil";
+import Objects from "./utils/Objects";
 
 
 export interface PresetPool {
@@ -189,6 +190,82 @@ async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv
   return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
 }
 
+export async function formatOption({content, presetPool, session, optionInfoMap, data}: {
+  content: string,
+  presetPool: PresetPool,
+  session: Session,
+  optionInfoMap: OptionInfoMap,
+  data?: any
+}): Promise<string> {
+  const contentList = [];
+  content = content
+    .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
+      contentList.push(p1);
+      return match;
+    });
+  if (contentList.length < 1) {
+    return content;
+  }
+
+  const argTexts = [
+    '$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg,
+  ];
+  const args: any[] = [
+    session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {},
+  ];
+  if (Objects.isNotNull(data)) {
+    argTexts.push('$data')
+    args.push(data);
+  }
+  argTexts.push(optionInfoMap.fnArg)
+  args.push(optionInfoMap.map ?? {});
+
+  const resMap = {};
+  for (let i = 0; i < contentList.length; i++) {
+    const item = contentList[i];
+    resMap[i + '_' + item] = await AsyncFunction(...argTexts, 'return ' + item.replace(/\n/g, '\\n'))(...args);
+  }
+
+  let i = 0;
+  content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
+    return resMap[i++ + '_' + p1] ?? '';
+  })
+
+  return content;
+}
+
+export async function formatObjOption({obj, optionInfoMap, session, compelString, presetPool}: {
+  obj: {},
+  optionInfoMap: OptionInfoMap,
+  session: Session,
+  compelString: boolean,
+  presetPool: PresetPool,
+}) {
+  await Objects.thoroughForEach(obj, async (value, key, obj) => {
+    if (typeof value === 'string') {
+      obj[key] = await formatOption({content: obj[key], optionInfoMap, session, presetPool});
+    }
+  });
+
+  for (let name in optionInfoMap.infoMap) {
+    const optionInfo = optionInfoMap.infoMap[name];
+    const oKey = optionInfo.overwriteKey || name;
+    if (
+      !optionInfo.autoOverwrite
+      || typeof optionInfo.value === 'undefined'
+      || typeof obj[oKey] === 'undefined'
+    ) {
+      continue;
+    }
+    try {
+      eval(`obj.${oKey} = optionInfo.value` + (compelString ? '+""' : ''));
+    } catch (e) {
+    }
+  }
+
+  return obj;
+}
+
 export default function () {
 
   const recalls = new Set<NodeJS.Timeout>();
@@ -289,14 +366,14 @@ export default function () {
       ctx, config, source, presetPool, session, optionInfoMap, resData
     });
 
-    const [msg] = await session.send(fragment);
-    if (source.recall > 0) {
-      const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000);
-      recalls.add(timeout);
+    if (fragment) {
+      const [msg] = await session.send(fragment);
+      if (source.recall > 0) {
+        const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000);
+        recalls.add(timeout);
+      }
     }
   }
 
-
   return {send, initConfig, onDispose};
-
 }

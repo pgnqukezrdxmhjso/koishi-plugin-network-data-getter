@@ -3,10 +3,9 @@ import {Dict, HTTP, Schema} from 'koishi'
 import GeneratePresetFns from './GeneratePresetFns.js'
 import fs from "node:fs";
 import path from "node:path";
-import {rendered} from "./Renderer";
 
-export type SendType = 'image' | 'text' | 'ejs' | 'audio' | 'video' | 'file'
-export type SplitType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
+export type BaseProcessorType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
+export type RendererType = 'text' | 'image' | 'audio' | 'video' | 'file' | 'ejs' | 'cmdLink'
 export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
 export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
 export type OptionValue = boolean | string | number;
@@ -52,15 +51,18 @@ export interface CmdSource {
   recall?: number;
   sourceUrl: string;
   requestMethod: HTTP.Method;
-  expertMode: boolean;
-  expert?: SourceExpert;
-  sendType: SendType;
-  dataType: SplitType;
 
+  dataType: BaseProcessorType;
   jsonKey?: string;
   jquerySelector?: string;
   attribute?: string;
+
+  sendType: RendererType;
   ejsTemplate?: string;
+  cmdLink?: string;
+
+  expertMode: boolean;
+  expert?: SourceExpert;
 }
 
 
@@ -148,10 +150,10 @@ export const Config: Schema<Config> = Schema.intersect([
     Schema.object({
       _versionHistory: Schema.object({
         _: Schema.never().description(fs.readFileSync(path.join(__dirname, '../readme.md')).toString().replace(/^[\s\S]*# VersionHistory/, ''))
-      }).description('更新歷史').collapse(),
-      anonymousStatistics: Schema.boolean().description('匿名資料統計（記錄插件啟用的次數）').default(true),
-      gettingTips: Schema.boolean().description('獲取中提示').default(true),
-      expertMode: Schema.boolean().description('專家模式').default(false),
+      }).collapse().description('更新歷史'),
+      anonymousStatistics: Schema.boolean().default(true).description('匿名資料統計（記錄插件啟用的次數）'),
+      gettingTips: Schema.boolean().default(true).description('獲取中提示'),
+      expertMode: Schema.boolean().default(false).description('專家模式'),
     }).description('基礎設定'),
     Schema.union([
       Schema.object({
@@ -161,20 +163,20 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             platformResourceList: Schema.array(Schema.intersect([
               Schema.object({
-                name: Schema.string().description('平臺名').required(),
-                requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
+                name: Schema.string().required().description('平臺名'),
+                requestHeaders: Schema.dict(String).role('table').default({}).description('請求頭'),
               }),
               ...proxyConfigSchema(),
-            ])).description('平臺資源下載配置(平臺指discord、telegram等,資源指指令中的圖片、影片、音訊、檔案)').collapse(),
+            ])).collapse().description('平臺資源下載配置(平臺指discord、telegram等,資源指指令中的圖片、影片、音訊、檔案)'),
             presetConstants: Schema.array(Schema.intersect([
               Schema.object({
-                name: Schema.string().description('常量名').required(),
+                name: Schema.string().required().description('常量名'),
                 type: Schema.union([
                   Schema.const('boolean').description('布林'),
                   Schema.const('string').description('字串'),
                   Schema.const('number').description('數字'),
                   Schema.const('file').description('檔案'),
-                ]).description('型別').default('string'),
+                ]).default('string').description('型別'),
               }),
               Schema.union([
                 Schema.object({
@@ -191,23 +193,23 @@ export const Config: Schema<Config> = Schema.intersect([
                 }),
                 Schema.object({
                   type: Schema.const('file').required(),
-                  value: Schema.path().description('讀取檔案作為字串使用').required(),
+                  value: Schema.path().required().description('讀取檔案作為字串使用'),
                 }),
                 Schema.object({} as any)
               ])
-            ])).description('預設常量，可在後續預設函式、配置中使用').collapse(),
+            ])).collapse().description('預設常量，可在後續預設函式、配置中使用'),
             presetFns: Schema.array(Schema.object({
-              async: Schema.boolean().description('非同步函式(在後續的使用中需要在非同步函式前書寫await)').default(false),
-              name: Schema.string().description('函式名').required(),
+              async: Schema.boolean().default(false).description('非同步函式(在後續的使用中需要在非同步函式前書寫await)'),
+              name: Schema.string().required().description('函式名'),
               args: Schema.string().description('引數; 例如 a,b'),
-              body: Schema.string().description('程式碼; 例如 return a+b').role('textarea').required(),
-            })).default(GeneratePresetFns()).description(
+              body: Schema.string().role('textarea').required().description('程式碼; 例如 return a+b'),
+            })).default(GeneratePresetFns()).collapse().description(
               '預設函式，可在後續配置中使用  \n' +
               '可使用的模組: 變數名  \n' +
               '[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n' +
               '[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n' +
               '[http](https://koishi.chat/zh-CN/plugins/develop/http.html): http  \n'
-            ).collapse(),
+            ),
           }),
         ])
       }),
@@ -217,13 +219,14 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     sources: Schema.array(Schema.intersect([
       Schema.object({
-        command: Schema.string().description('指令名稱').required(),
-        alias: Schema.array(Schema.string()).description('指令別名').default([]),
+        command: Schema.string().required().description('指令名稱'),
+        alias: Schema.array(Schema.string()).default([]).description('指令別名'),
         desc: Schema.string().description('指令描述'),
-        reverseGettingTips: Schema.boolean().description('對獲取中提示狀態取反').default(false),
-        recall: Schema.number().description('訊息撤回時限(分鐘,0為不撤回)').default(0),
-        sourceUrl: Schema.string().role('link').description('請求地址').required(),
-        requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).description('請求方法').default('GET'),
+        reverseGettingTips: Schema.boolean().default(false).description('對獲取中提示狀態取反'),
+        recall: Schema.number().default(0).description('訊息撤回時限(分鐘,0為不撤回)'),
+        sourceUrl: Schema.string().role('textarea', {rows: [1, 9]}).required().description('請求地址'),
+        requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).default('GET')
+          .description('請求方法'),
       }),
       Schema.object({
         dataType: Schema.union([
@@ -232,7 +235,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
           Schema.const('html').description('HTML 文字'),
           Schema.const('plain').description('JSONRaw')
-        ]).description('資料返回型別').default('txt'),
+        ]).default('txt').description('資料返回型別'),
       }),
       Schema.union([
         Schema.object({
@@ -241,8 +244,8 @@ export const Config: Schema<Config> = Schema.intersect([
         }),
         Schema.object({
           dataType: Schema.const('html').required(),
-          jquerySelector: Schema.string().description('jQuery 選擇器').default('p'),
-          attribute: Schema.string().description('要提取的 HTML 元素屬性, 數值為空時獲取HTML元素內文字').default('')
+          jquerySelector: Schema.string().default('p').description('jQuery 選擇器'),
+          attribute: Schema.string().default('').description('要提取的 HTML 元素屬性, 數值為空時獲取HTML元素內文字')
         }),
         Schema.object({} as any)
       ]),
@@ -254,18 +257,25 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.const('video').description('影片'),
           Schema.const('file').description('檔案'),
           Schema.const('ejs').description('EJS 模板'),
-        ]).description('渲染型別').default('text'),
+          Schema.const('cmdLink').description('指令鏈'),
+        ]).default('text').description('渲染型別'),
       }),
       Schema.union([
         Schema.object({
           sendType: Schema.const('ejs').required(),
-          ejsTemplate: Schema.string().role('textarea', {rows: [4, 10]}).description('EJS 模板').required(),
+          ejsTemplate: Schema.string().role('textarea', {rows: [3, 9]}).required()
+            .description('EJS 模板'),
+        }),
+        Schema.object({
+          sendType: Schema.const('cmdLink').required(),
+          cmdLink: Schema.string().role('textarea', {rows: [2, 9]}).required()
+            .description('指令鏈'),
         }),
         Schema.object({} as any)
       ]),
 
       Schema.object({
-        expertMode: Schema.boolean().description('專家模式').default(false),
+        expertMode: Schema.boolean().default(false).description('專家模式'),
       }),
       Schema.union([
         Schema.object({
@@ -274,20 +284,21 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.object({
               commandArgs: Schema.array(Schema.intersect([
                 Schema.object({
-                  name: Schema.string().description('名稱').required(),
+                  name: Schema.string().required().description('名稱'),
                   desc: Schema.string().description('描述'),
                   type: Schema.union([
                     Schema.const('string').description('字串'),
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
-                  ]).description('型別  \n' +
-                    '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
-                    '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
-                    '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`')
-                    .default('string'),
-                  required: Schema.boolean().description('必填').default(false),
-                  autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
+                  ]).default('string')
+                    .description('型別  \n' +
+                      '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
+                      '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
+                      '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`'
+                    ),
+                  required: Schema.boolean().default(false).description('必填'),
+                  autoOverwrite: Schema.boolean().default(false).description('自動覆寫body中同名key'),
                 }),
                 Schema.union([
                   Schema.object({
@@ -296,11 +307,11 @@ export const Config: Schema<Config> = Schema.intersect([
                   }),
                   Schema.object({} as any)
                 ]),
-              ])).description('引數配置').collapse(),
+              ])).collapse().description('引數配置'),
               commandOptions: Schema.array(Schema.intersect([
                 Schema.object({
-                  name: Schema.string().description('名稱').required(),
-                  acronym: Schema.string().description('縮寫').pattern(/^[a-zA-Z0-9]?$/),
+                  name: Schema.string().required().description('名稱'),
+                  acronym: Schema.string().pattern(/^[a-zA-Z0-9]?$/).description('縮寫'),
                   desc: Schema.string().description('描述'),
                   type: Schema.union([
                     Schema.const('boolean').description('布林'),
@@ -308,11 +319,12 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
-                  ]).description('型別  \n' +
-                    '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
-                    '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
-                    '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`')
-                    .default('boolean'),
+                  ]).default('boolean')
+                    .description('型別  \n' +
+                      '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
+                      '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
+                      '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`'
+                    ),
                 }),
                 Schema.union([
                   Schema.object({
@@ -330,7 +342,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   Schema.object({} as any)
                 ]),
                 Schema.object({
-                  autoOverwrite: Schema.boolean().description('自動覆寫body中同名key').default(false),
+                  autoOverwrite: Schema.boolean().default(false).description('自動覆寫body中同名key'),
                 }),
                 Schema.union([
                   Schema.object({
@@ -339,26 +351,28 @@ export const Config: Schema<Config> = Schema.intersect([
                   }),
                   Schema.object({} as any)
                 ]),
-              ])).description('選項配置').collapse(),
+              ])).collapse().description('選項配置'),
               _prompt: Schema.never().description(
-                '請求地址、請求頭、請求資料 中可以使用  \n' +
+                '`請求地址` `請求頭` `請求資料` `指令鏈` 配置項中可使用  \n' +
                 '**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n' +
                 '**<%=名稱%>** 插入同名的預設常量或引數或選項  \n' +
                 '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
-                '**<%= %>** 中允許使用js程式碼與預設函式 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`'
+                '**<%= %>** 中允許使用 `js程式碼` `預設常量` `預設函式` 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`  \n' +
+                '`指令鏈` 配置項中可額外使用  \n' +
+                '**<%=$data%>** 插入返回的資料'
               ),
-              requestHeaders: Schema.dict(String).role('table').description('請求頭').default({}),
+              requestHeaders: Schema.dict(String).role('table').default({}).description('請求頭'),
               requestDataType:
                 Schema.union([
                   Schema.const('empty').description('無'),
                   'form-data', 'x-www-form-urlencoded', 'raw'
-                ]).description('資料型別').default('empty'),
+                ]).default('empty').description('資料型別'),
             }),
             Schema.union([
               Schema.object({
                 requestDataType: Schema.const('form-data').required(),
                 requestForm: Schema.dict(String).role('table').description('請求資料'),
-                requestFormFiles: Schema.dict(Schema.path()).description('請求檔案').default({}),
+                requestFormFiles: Schema.dict(Schema.path()).default({}).description('請求檔案'),
               }),
               Schema.object({
                 requestDataType: Schema.const('x-www-form-urlencoded').required(),
@@ -366,8 +380,8 @@ export const Config: Schema<Config> = Schema.intersect([
               }),
               Schema.object({
                 requestDataType: Schema.const('raw').required(),
-                requestJson: Schema.boolean().description('請求資料是否為 JSON').default(true),
-                requestRaw: Schema.string().role('textarea').description('請求資料').default(''),
+                requestJson: Schema.boolean().default(true).description('請求資料是否為 JSON'),
+                requestRaw: Schema.string().role('textarea').default('').description('請求資料'),
               }),
               Schema.object({} as any)
             ]),
@@ -379,7 +393,7 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.union([
               Schema.object({
                 renderedMediaUrlToBase64: Schema.const(true),
-                rendererRequestHeaders: Schema.dict(String).role('table').description('渲染資源類請求頭').default({}),
+                rendererRequestHeaders: Schema.dict(String).role('table').default({}).description('渲染資源類請求頭'),
               }),
               Schema.object({})
             ])

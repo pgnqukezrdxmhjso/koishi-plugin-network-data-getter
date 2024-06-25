@@ -1,18 +1,25 @@
 import {Context, Fragment, h, HTTP, Random, Session} from "koishi";
 import {render} from 'ejs'
 
-import {CmdSource, Config, SendType, SourceExpert} from "./config";
-import {formatObjOption, getCmdHttpClient} from "./CmdReq";
-import {OptionInfoMap, PresetPool} from "./Core";
+import {CmdSource, Config, RendererType, SourceExpert} from "./Config";
+import {getCmdHttpClient} from "./CmdReq";
+import {formatObjOption, formatOption, OptionInfoMap, PresetPool} from "./Core";
 import Strings from "./utils/Strings";
 import {ResData} from "./CmdResData";
 import Objects from "./utils/Objects";
 import {logger} from "./logger";
 
+
 interface Renderer {
   isMedia?: boolean;
   verify?: (s: string) => boolean;
-  build: (resData: ResData, source: CmdSource) => Fragment;
+  build: (arg: {
+    resData: ResData;
+    source: CmdSource;
+    presetPool: PresetPool;
+    session: Session;
+    optionInfoMap: OptionInfoMap;
+  }) => Promise<Fragment>;
 }
 
 
@@ -47,38 +54,38 @@ async function mediaUrlToBase64({ctx, config, source, presetPool, session, optio
   return `data:${res.headers.get('Content-Type')};base64,` + Buffer.from(res.data).toString('base64');
 }
 
-const rendererMap: { [key in SendType]: Renderer } = {
+const rendererMap: { [key in RendererType]: Renderer } = {
   'text': {
     verify: (s: string) => s.length > 0,
-    build: (resData: ResData) => resData.text
+    build: async ({resData}) => resData.text
   },
 
   'image': {
     isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:image/'),
-    build: (resData: ResData) => h.img(resData.text)
+    build: async ({resData}) => h.img(resData.text)
   },
 
   'audio': {
     isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:audio/'),
-    build: (resData: ResData) => h.audio(resData.text)
+    build: async ({resData}) => h.audio(resData.text)
   },
 
   'video': {
     isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:video/'),
-    build: (resData: ResData) => h.video(resData.text)
+    build: async ({resData}) => h.video(resData.text)
   },
 
   'file': {
     isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:'),
-    build: (resData: ResData) => h.file(resData.text)
+    build: async ({resData}) => h.file(resData.text)
   },
 
   'ejs': {
-    build: (resData: ResData, source: CmdSource) => {
+    build: async ({resData, source}) => {
       try {
         const data = resData.json;
         const {ejsTemplate} = source;
@@ -92,6 +99,21 @@ const rendererMap: { [key in SendType]: Renderer } = {
         logger.error(err)
         throw err
       }
+    }
+  },
+  'cmdLink': {
+    build: async (
+      {resData, source, presetPool, session, optionInfoMap}
+    ) => {
+      if (Strings.isBlank(source.cmdLink)) {
+        return null;
+      }
+      const cmdLink = await formatOption({
+        content: source.cmdLink, presetPool, session, optionInfoMap,
+        data: resData.json ?? resData.text ?? resData.texts
+      });
+      await session.execute(cmdLink);
+      return null;
     }
   }
 }
@@ -111,7 +133,9 @@ export async function rendered({ctx, config, source, presetPool, session, option
     throw (`不支援的渲染型別: ${source.sendType}`);
   }
   if (resData.texts) {
-    const selected = Random.pick(resData.texts.filter(s => renderer.verify(s)));
+    const selected = Random.pick(
+      !renderer.verify ? resData.texts : resData.texts.filter(s => renderer.verify(s))
+    );
     if (Strings.isEmpty(selected)) {
       throw ('沒有符合條件的結果');
     }
@@ -126,7 +150,7 @@ export async function rendered({ctx, config, source, presetPool, session, option
     }
   }
 
-  return renderer.build(resData, source);
+  return await renderer.build({resData, source, presetPool, session, optionInfoMap});
 }
 
 

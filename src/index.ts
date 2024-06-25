@@ -5,13 +5,13 @@ import {Argv, Command, Context, HTTP} from 'koishi';
 import {} from '@koishijs/plugin-console'
 
 import Strings from "./utils/Strings";
-import {Config} from './config';
+import {Config} from './Config';
 import {logger} from './logger';
 import Umami from "./Umami";
 import Core from "./Core";
 
 export const inject = ['http'];
-export {Config} from './config'
+export {Config} from './Config'
 export const name = 'network-data-getter'
 // noinspection JSUnusedGlobalSymbols
 export const reusable = true;

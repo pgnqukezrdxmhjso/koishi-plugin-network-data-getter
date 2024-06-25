@@ -1,7 +1,7 @@
 import {parse} from 'node-html-parser';
 import {HTTP} from "koishi";
 import {parseJson, parseObjectToArr} from "./utils";
-import {CmdSource, SplitType} from "./config";
+import {CmdSource, BaseProcessorType} from "./Config";
 
 export interface ResData {
   json?: {} | [];
@@ -10,7 +10,7 @@ export interface ResData {
 }
 
 type BaseProcessorMap = {
-  [key in SplitType]: (res: HTTP.Response, source: CmdSource) => ResData
+  [key in BaseProcessorType]: (res: HTTP.Response, source: CmdSource) => ResData
 }
 
 

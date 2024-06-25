@@ -3,19 +3,17 @@ import fs from "node:fs";
 
 import {Context, HTTP, Session} from "koishi";
 
-import {CmdSource, Config, PlatformResource, ProxyConfig} from "./config";
+import {CmdSource, Config, PlatformResource, ProxyConfig} from "./Config";
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
-import {OptionInfoMap, PresetPool} from "./Core";
+import {formatObjOption, formatOption, OptionInfoMap, PresetPool} from "./Core";
 
 
 interface PlatformHttpClient {
   client: HTTP;
   config?: PlatformResource
 }
-
-const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
 function buildHttpClient({ctx, proxyConfig}: {
   ctx: Context,
@@ -73,72 +71,6 @@ function getPlatformHttpClient({ctx, config, session}: {
     client: buildHttpClient({ctx, proxyConfig: platformResource}),
     config: platformResource
   };
-}
-
-async function formatOption({content, optionInfoMap, session, presetPool}: {
-  content: string,
-  optionInfoMap: OptionInfoMap,
-  session: Session,
-  presetPool: PresetPool,
-}): Promise<string> {
-  const contentList = [];
-  content = content
-    .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-      contentList.push(p1);
-      return match;
-    });
-  if (contentList.length < 1) {
-    return content;
-  }
-
-  const resMap = {};
-  for (let i = 0; i < contentList.length; i++) {
-    const item = contentList[i];
-    resMap[i + '_' + item] = await AsyncFunction(
-      '$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg, optionInfoMap.fnArg, 'return ' + item.replace(/\n/g, '\\n')
-    )(
-      session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}, optionInfoMap.map ?? {}
-    );
-  }
-
-  let i = 0;
-  content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-    return resMap[i++ + '_' + p1] ?? '';
-  })
-
-  return content;
-}
-
-export async function formatObjOption({obj, optionInfoMap, session, compelString, presetPool}: {
-  obj: {},
-  optionInfoMap: OptionInfoMap,
-  session: Session,
-  compelString: boolean,
-  presetPool: PresetPool,
-}) {
-  await Objects.thoroughForEach(obj, async (value, key, obj) => {
-    if (typeof value === 'string') {
-      obj[key] = await formatOption({content: obj[key], optionInfoMap, session, presetPool});
-    }
-  });
-
-  for (let name in optionInfoMap.infoMap) {
-    const optionInfo = optionInfoMap.infoMap[name];
-    const oKey = optionInfo.overwriteKey || name;
-    if (
-      !optionInfo.autoOverwrite
-      || typeof optionInfo.value === 'undefined'
-      || typeof obj[oKey] === 'undefined'
-    ) {
-      continue;
-    }
-    try {
-      eval(`obj.${oKey} = optionInfo.value` + (compelString ? '+""' : ''));
-    } catch (e) {
-    }
-  }
-
-  return obj;
 }
 
 async function handleReqExpert({ctx, config, source, presetPool, session, optionInfoMap, requestConfig,}: {

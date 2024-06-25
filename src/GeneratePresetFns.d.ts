@@ -1,3 +1,3 @@
-import {PresetFn} from "./config";
+import {PresetFn} from "./Config";
 
 export default function (): PresetFn[]
