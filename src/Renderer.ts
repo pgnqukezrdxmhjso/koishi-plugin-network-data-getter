@@ -85,12 +85,28 @@ const rendererMap: { [key in RendererType]: Renderer } = {
   },
 
   'ejs': {
-    build: async ({resData, source}) => {
+    build: async (
+      {resData, source, presetPool, session, optionInfoMap}
+    ) => {
       try {
-        const data = resData.json;
+        const data = resData.json ?? resData.text ?? resData.texts;
         const {ejsTemplate} = source;
         if (ejsTemplate) {
-          return render(ejsTemplate, {data})
+          let code = await render(ejsTemplate, {
+            $e: session.event,
+            data,
+            $data: data,
+            ...(presetPool.presetConstantPool ?? {}),
+            ...(presetPool.presetFnPool ?? {}),
+            ...(optionInfoMap.map ?? {}),
+          }, {
+            async: true,
+            rmWhitespace: true,
+            beautify: false
+          });
+          code = code.replace(/\n\n/g, '\n');
+          console.log(code);
+          return code;
         } else {
           return JSON.stringify(data)
         }

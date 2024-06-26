@@ -353,12 +353,12 @@ export const Config: Schema<Config> = Schema.intersect([
                 ]),
               ])).collapse().description('選項配置'),
               _prompt: Schema.never().description(
-                '`請求地址` `請求頭` `請求資料` `指令鏈` 配置項中可使用  \n' +
+                '`請求地址` `請求頭` `請求資料` `指令鏈` `EJS 模板` 配置項中可使用  \n' +
                 '**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n' +
                 '**<%=名稱%>** 插入同名的預設常量或引數或選項  \n' +
                 '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
                 '**<%= %>** 中允許使用 `js程式碼` `預設常量` `預設函式` 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`  \n' +
-                '`指令鏈` 配置項中可額外使用  \n' +
+                '`指令鏈` `EJS 模板` 配置項中可額外使用  \n' +
                 '**<%=$data%>** 插入返回的資料'
               ),
               requestHeaders: Schema.dict(String).role('table').default({}).description('請求頭'),

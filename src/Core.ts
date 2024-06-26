@@ -208,17 +208,15 @@ export async function formatOption({content, presetPool, session, optionInfoMap,
   }
 
   const argTexts = [
-    '$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg,
+    '$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg, optionInfoMap.fnArg
   ];
   const args: any[] = [
-    session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {},
+    session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}, optionInfoMap.map ?? {}
   ];
   if (Objects.isNotNull(data)) {
     argTexts.push('$data')
     args.push(data);
   }
-  argTexts.push(optionInfoMap.fnArg)
-  args.push(optionInfoMap.map ?? {});
 
   const resMap = {};
   for (let i = 0; i < contentList.length; i++) {
