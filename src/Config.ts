@@ -1,6 +1,6 @@
 import {Dict, HTTP, Schema} from 'koishi'
 
-import GeneratePresetFns from './GeneratePresetFns.js'
+import PresetFns from './PresetFns'
 import fs from "node:fs";
 import path from "node:path";
 
@@ -203,7 +203,7 @@ export const Config: Schema<Config> = Schema.intersect([
               name: Schema.string().required().description('函式名'),
               args: Schema.string().description('引數; 例如 a,b'),
               body: Schema.string().role('textarea').required().description('程式碼; 例如 return a+b'),
-            })).default(GeneratePresetFns()).collapse().description(
+            })).default(PresetFns).collapse().description(
               '預設函式，可在後續配置中使用  \n' +
               '可使用的模組: 變數名  \n' +
               '[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n' +

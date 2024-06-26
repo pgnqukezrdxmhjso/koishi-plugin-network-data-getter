@@ -239,8 +239,8 @@ EJS模板則可輸入:
 
 ```yml
 ejsTemplate: |-
-  <p> 成功建立 name: <%= data.name %>, job: <%= data.job %></p>
-  <p> id: <%= data.id %> </p>
+  <p> 成功建立 name: <%= $data.name %>, job: <%= $data.job %></p>
+  <p> id: <%= $data.id %> </p>
 ```
 
 插件將會根據模板輸出迴應。
@@ -264,6 +264,10 @@ ejsTemplate: |-
 * 定時執行指令功能，先使用head請求判斷差異
 * 通過轉發發送內容的選項
 * 支持在插入參數中插入參數中的文件
+
+### 0.1.38
+
+* 修復預設函式預設值bug
 
 ### 0.1.37
 
