@@ -1,12 +1,11 @@
-import {Context, Fragment, h, HTTP, Random, Session} from "koishi";
+import {Context, Fragment, h, Random, Session} from "koishi";
 import {render} from 'ejs'
 
-import {CmdSource, Config, RendererType, SourceExpert} from "./Config";
-import {getCmdHttpClient} from "./CmdReq";
-import {formatObjOption, formatOption, OptionInfoMap, PresetPool} from "./Core";
+import {CmdSource, Config, RendererType} from "./Config";
+import {urlToBase64} from "./Http";
+import {formatOption, OptionInfoMap, PresetPool} from "./Core";
 import Strings from "./utils/Strings";
 import {ResData} from "./CmdResData";
-import Objects from "./utils/Objects";
 import {logger} from "./logger";
 
 
@@ -20,38 +19,6 @@ interface Renderer {
     session: Session;
     optionInfoMap: OptionInfoMap;
   }) => Promise<Fragment>;
-}
-
-
-async function mediaUrlToBase64({ctx, config, source, presetPool, session, optionInfoMap, url}: {
-  ctx: Context,
-  config: Config,
-  source: CmdSource,
-  presetPool: PresetPool,
-  session: Session,
-  optionInfoMap: OptionInfoMap,
-  url: string,
-}) {
-  const expert: SourceExpert = source.expertMode ? source.expert : {renderedMediaUrlToBase64: true} as any;
-  if (!expert.renderedMediaUrlToBase64) {
-    return;
-  }
-
-  const reqConfig: HTTP.RequestConfig = {
-    headers: {
-      Referer: new URL(url).origin
-    }
-  };
-  if (Objects.isNotEmpty(expert.rendererRequestHeaders)) {
-    reqConfig.headers = {...reqConfig.headers, ...expert.rendererRequestHeaders};
-    await formatObjOption({
-      obj: reqConfig.headers,
-      optionInfoMap, session, compelString: true, presetPool
-    });
-  }
-  const httpClient = getCmdHttpClient({ctx, config, source});
-  const res = await httpClient('get', url, reqConfig);
-  return `data:${res.headers.get('Content-Type')};base64,` + Buffer.from(res.data).toString('base64');
 }
 
 const rendererMap: { [key in RendererType]: Renderer } = {
@@ -101,19 +68,17 @@ const rendererMap: { [key in RendererType]: Renderer } = {
             ...(optionInfoMap.map ?? {}),
           }, {
             async: true,
-            rmWhitespace: true,
-            beautify: false
+            rmWhitespace: true
           });
           code = code.replace(/\n\n/g, '\n');
-          console.log(code);
           return code;
         } else {
-          return JSON.stringify(data)
+          return JSON.stringify(data);
         }
       } catch (err) {
-        logger.error('Error while parsing ejs data and json:')
-        logger.error(err)
-        throw err
+        logger.error('Error while parsing ejs data and json:');
+        logger.error(err);
+        throw err;
       }
     }
   },
@@ -157,13 +122,17 @@ export async function rendered({ctx, config, source, presetPool, session, option
     }
     resData.text = selected;
   }
-  if (renderer.isMedia && resData.text?.startsWith?.('http')) {
-    const base64 = await mediaUrlToBase64({
-      ctx, config, source, presetPool, session, optionInfoMap, url: resData.text
+  if (renderer.isMedia
+    && (!source.expertMode || source.expert.renderedMediaUrlToBase64)
+    && resData.text?.startsWith?.('http')
+  ) {
+    resData.text = await urlToBase64({
+      isPlatform: false, ctx, config, source, presetPool, session, optionInfoMap,
+      url: resData.text,
+      reqConfig: {
+        headers: source.expertMode ? source.expert.rendererRequestHeaders : undefined
+      }
     });
-    if (base64) {
-      resData.text = base64;
-    }
   }
 
   return await renderer.build({resData, source, presetPool, session, optionInfoMap});

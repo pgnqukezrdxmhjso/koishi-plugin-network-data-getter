@@ -194,7 +194,7 @@ export async function formatOption({content, presetPool, session, optionInfoMap,
   content: string,
   presetPool: PresetPool,
   session: Session,
-  optionInfoMap: OptionInfoMap,
+  optionInfoMap?: OptionInfoMap,
   data?: any
 }): Promise<string> {
   const contentList = [];
@@ -207,12 +207,12 @@ export async function formatOption({content, presetPool, session, optionInfoMap,
     return content;
   }
 
-  const argTexts = [
-    '$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg, optionInfoMap.fnArg
-  ];
-  const args: any[] = [
-    session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}, optionInfoMap.map ?? {}
-  ];
+  const argTexts = ['$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
+  const args: any[] = [session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
+  if (optionInfoMap) {
+    argTexts.push(optionInfoMap.fnArg)
+    args.push(optionInfoMap.map ?? {});
+  }
   if (Objects.isNotNull(data)) {
     argTexts.push('$data')
     args.push(data);
@@ -234,7 +234,7 @@ export async function formatOption({content, presetPool, session, optionInfoMap,
 
 export async function formatObjOption({obj, optionInfoMap, session, compelString, presetPool}: {
   obj: {},
-  optionInfoMap: OptionInfoMap,
+  optionInfoMap?: OptionInfoMap,
   session: Session,
   compelString: boolean,
   presetPool: PresetPool,
@@ -245,7 +245,7 @@ export async function formatObjOption({obj, optionInfoMap, session, compelString
     }
   });
 
-  for (let name in optionInfoMap.infoMap) {
+  if (optionInfoMap) for (let name in optionInfoMap.infoMap) {
     const optionInfo = optionInfoMap.infoMap[name];
     const oKey = optionInfo.overwriteKey || name;
     if (

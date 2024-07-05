@@ -13,7 +13,7 @@ export type OptionValue = boolean | string | number;
 export interface CommandArg {
   name: string;
   desc?: string;
-  type: 'string' | 'number' | 'user' | 'channel';
+  type: 'string' | 'number' | 'user' | 'channel' | 'text';
   required: boolean;
   autoOverwrite: boolean;
   overwriteKey?: string;
@@ -23,7 +23,7 @@ export interface CommandOption {
   name: string;
   acronym?: string;
   desc?: string;
-  type: 'boolean' | 'string' | 'number' | 'user' | 'channel';
+  type: 'boolean' | 'string' | 'number' | 'user' | 'channel' | 'text';
   value?: OptionValue;
   autoOverwrite: boolean;
   overwriteKey?: string;
@@ -291,11 +291,13 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
+                    Schema.const('text').description('長文字'),
                   ]).default('string')
                     .description('型別  \n' +
                       '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
                       '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
-                      '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`'
+                      '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n' +
+                      '長文字型別會將後續所有內容全部當作一個整體'
                     ),
                   required: Schema.boolean().default(false).description('必填'),
                   autoOverwrite: Schema.boolean().default(false).description('自動覆寫body中同名key'),
@@ -319,11 +321,13 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.const('number').description('數字'),
                     Schema.const('user').description('用户'),
                     Schema.const('channel').description('頻道'),
+                    Schema.const('text').description('長文字'),
                   ]).default('boolean')
                     .description('型別  \n' +
                       '字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n' +
                       '用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n' +
-                      '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`'
+                      '頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n' +
+                      '長文字型別會將後續所有內容全部當作一個整體'
                     ),
                 }),
                 Schema.union([

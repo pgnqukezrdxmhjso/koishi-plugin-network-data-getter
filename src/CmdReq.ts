@@ -3,75 +3,12 @@ import fs from "node:fs";
 
 import {Context, HTTP, Session} from "koishi";
 
-import {CmdSource, Config, PlatformResource, ProxyConfig} from "./Config";
+import {CmdSource, Config} from "./Config";
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
 import {formatObjOption, formatOption, OptionInfoMap, PresetPool} from "./Core";
-
-
-interface PlatformHttpClient {
-  client: HTTP;
-  config?: PlatformResource
-}
-
-function buildHttpClient({ctx, proxyConfig}: {
-  ctx: Context,
-  proxyConfig: ProxyConfig,
-}): HTTP {
-  switch (proxyConfig.proxyType) {
-    case "NONE": {
-      return ctx.http.extend({
-        timeout: proxyConfig.timeout,
-        ...{proxyAgent: undefined}
-      });
-    }
-    case "MANUAL": {
-      return ctx.http.extend({
-        timeout: proxyConfig.timeout,
-        ...{proxyAgent: proxyConfig.proxyAgent}
-      });
-    }
-    case "GLOBAL":
-    default: {
-      return ctx.http;
-    }
-  }
-}
-
-export function getCmdHttpClient({ctx, config, source}: {
-  ctx: Context,
-  config: Config,
-  source: CmdSource,
-}): HTTP {
-  const proxyConfig: ProxyConfig = (config.expertMode && config.expert) ? config.expert : {proxyType: 'GLOBAL'};
-  let cmdHttpClient: HTTP = buildHttpClient({ctx, proxyConfig});
-  if (!source.expertMode || Strings.isBlank(source.expert?.proxyAgent)) {
-    return cmdHttpClient;
-  }
-  return cmdHttpClient.extend({
-    ...{proxyAgent: source.expert.proxyAgent} as any
-  });
-}
-
-function getPlatformHttpClient({ctx, config, session}: {
-  ctx: Context,
-  config: Config,
-  session: Session,
-}): PlatformHttpClient {
-  if (!config.expertMode) {
-    return {client: ctx.http};
-  }
-  const platformResource =
-    config.expert?.platformResourceList?.find(platformResource => platformResource.name === session.platform);
-  if (!platformResource) {
-    return {client: ctx.http};
-  }
-  return {
-    client: buildHttpClient({ctx, proxyConfig: platformResource}),
-    config: platformResource
-  };
-}
+import {getCmdHttpClient, loadUrl} from "./Http";
 
 async function handleReqExpert({ctx, config, source, presetPool, session, optionInfoMap, requestConfig,}: {
   ctx: Context,
@@ -148,18 +85,13 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
           continue;
         }
 
-        const platformHttpClient = getPlatformHttpClient({ctx, config, session});
-        const platformReqConfig: HTTP.RequestConfig = {
-          responseType: "blob",
-        };
-        if (platformHttpClient.config) {
-          platformReqConfig.headers = {...(platformHttpClient.config.requestHeaders || {})};
-          await formatObjOption({
-            obj: platformReqConfig.headers,
-            optionInfoMap, session, compelString: true, presetPool
-          });
-        }
-        const fileRes = await platformHttpClient.client('get', optionInfo.value + '', platformReqConfig);
+        const fileRes = await loadUrl({
+          isPlatform: true, ctx, config, presetPool, session,
+          url: optionInfo.value as string,
+          reqConfig: {
+            responseType: "blob",
+          }
+        });
 
         form.append(oKey, fileRes.data, optionInfo.fileName || await Files.getFileNameByBlob(fileRes.data));
         fileOverwriteKeys.push(oKey);
