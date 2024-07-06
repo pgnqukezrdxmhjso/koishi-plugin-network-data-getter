@@ -85,7 +85,7 @@ export async function loadUrl({isPlatform, ctx, config, source, presetPool, sess
   } else {
     let platformHttpClient = getPlatformHttpClient({ctx, config, session});
     httpClient = platformHttpClient.client;
-    if (Objects.isNotEmpty(platformHttpClient.config.requestHeaders)) {
+    if (Objects.isNotEmpty(platformHttpClient?.config?.requestHeaders)) {
       headers = {...headers, ...platformHttpClient.config.requestHeaders};
     }
   }
