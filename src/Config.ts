@@ -313,7 +313,7 @@ export const Config: Schema<Config> = Schema.intersect([
               commandOptions: Schema.array(Schema.intersect([
                 Schema.object({
                   name: Schema.string().required().description('名稱'),
-                  acronym: Schema.string().pattern(/^[a-zA-Z0-9]?$/).description('縮寫'),
+                  acronym: Schema.string().pattern(/^[a-zA-Z0-9]+$/).description('縮寫'),
                   desc: Schema.string().description('描述'),
                   type: Schema.union([
                     Schema.const('boolean').description('布林'),
