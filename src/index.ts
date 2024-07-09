@@ -45,6 +45,9 @@ export function apply(ctx: Context, config: Config) {
   initConfig({ctx, config});
   ctx.on('dispose', () => {
     applyCount--;
+    if (applyCount < 0) {
+      applyCount = 0;
+    }
     onDispose();
   });
 
@@ -117,7 +120,7 @@ export function apply(ctx: Context, config: Config) {
       const desc = [];
       const existValue = typeof option.value !== 'undefined';
       if (option.acronym) {
-        desc.push(`-${option.acronym}`);
+        desc.push((option.acronym.length < 2 ? '' : '-') + `-${option.acronym}`);
       }
       if (!existValue && option.type !== 'boolean') {
         desc.push(`[${option.name}:${option.type}]`);
