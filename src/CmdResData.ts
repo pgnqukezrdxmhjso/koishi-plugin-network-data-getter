@@ -1,7 +1,7 @@
 import {parse} from 'node-html-parser';
 import {HTTP} from "koishi";
 import {parseJson, parseObjectToArr} from "./utils";
-import {CmdSource, BaseProcessorType} from "./Config";
+import {BaseProcessorType, CmdSource} from "./Config";
 
 export interface ResData {
   json?: {} | [];

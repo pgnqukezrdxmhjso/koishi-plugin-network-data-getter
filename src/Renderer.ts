@@ -1,9 +1,9 @@
-import {Context, Fragment, h, Random, Session} from "koishi";
+import {Fragment, h, Random} from "koishi";
 import {render} from 'ejs'
 
-import {CmdSource, Config, RendererType} from "./Config";
+import {RendererType} from "./Config";
 import {urlToBase64} from "./Http";
-import {formatOption, OptionInfoMap, PresetPool} from "./Core";
+import {CmdCtx, formatOption} from "./Core";
 import Strings from "./utils/Strings";
 import {ResData} from "./CmdResData";
 import {logger} from "./logger";
@@ -12,12 +12,8 @@ import {logger} from "./logger";
 interface Renderer {
   isMedia?: boolean;
   verify?: (s: string) => boolean;
-  build: (arg: {
+  build: (args: CmdCtx & {
     resData: ResData;
-    source: CmdSource;
-    presetPool: PresetPool;
-    session: Session;
-    optionInfoMap: OptionInfoMap;
   }) => Promise<Fragment>;
 }
 
@@ -83,32 +79,26 @@ const rendererMap: { [key in RendererType]: Renderer } = {
     }
   },
   'cmdLink': {
-    build: async (
-      {resData, source, presetPool, session, optionInfoMap}
-    ) => {
-      if (Strings.isBlank(source.cmdLink)) {
+    build: async (args) => {
+      if (Strings.isBlank(args.source.cmdLink)) {
         return null;
       }
       const cmdLink = await formatOption({
-        content: source.cmdLink, presetPool, session, optionInfoMap,
-        data: resData.json ?? resData.text ?? resData.texts
+        ...args,
+        content: args.source.cmdLink,
+        data: args.resData.json ?? args.resData.text ?? args.resData.texts
       });
-      await session.execute(cmdLink);
+      await args.session.execute(cmdLink);
       return null;
     }
   }
 }
 
 
-export async function rendered({ctx, config, source, presetPool, session, optionInfoMap, resData}: {
-  ctx: Context,
-  config: Config,
-  source: CmdSource,
-  presetPool: PresetPool,
-  session: Session,
-  optionInfoMap: OptionInfoMap,
+export async function rendered(args: CmdCtx & {
   resData: ResData,
 }) {
+  const {source, resData} = args;
   const renderer = rendererMap[source.sendType]
   if (!renderer) {
     throw (`不支援的渲染型別: ${source.sendType}`);
@@ -127,7 +117,8 @@ export async function rendered({ctx, config, source, presetPool, session, option
     && resData.text?.startsWith?.('http')
   ) {
     resData.text = await urlToBase64({
-      isPlatform: false, ctx, config, source, presetPool, session, optionInfoMap,
+      ...args,
+      isPlatform: false,
       url: resData.text,
       reqConfig: {
         headers: source.expertMode ? source.expert.rendererRequestHeaders : undefined
@@ -135,7 +126,7 @@ export async function rendered({ctx, config, source, presetPool, session, option
     });
   }
 
-  return await renderer.build({resData, source, presetPool, session, optionInfoMap});
+  return await renderer.build(args);
 }
 
 

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import {Argv, Context, Element, Fragment, HTTP, Session} from "koishi";
 import * as OTPAuth from "otpauth";
 
-import {Config, CmdSource, OptionValue, CommandArg, CommandOption} from "./Config";
+import {CmdSource, CommandArg, CommandOption, Config, OptionValue} from "./Config";
 import {cmdResData} from "./CmdResData";
 import Arrays from "./utils/Arrays";
 import {rendered} from "./Renderer";
@@ -40,6 +40,15 @@ export interface OptionInfoMap {
   fnArg: string;
 }
 
+export interface CmdCtx {
+  ctx: Context;
+  config: Config;
+  source: CmdSource;
+  presetPool: PresetPool;
+  session: Session;
+  optionInfoMap: OptionInfoMap;
+}
+
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
 async function getGuildMember({userId, session}: {
@@ -49,8 +58,8 @@ async function getGuildMember({userId, session}: {
   let res: GuildMember;
   await KoishiUtil.forList(
     (member) => {
-      const nick = member.nick ?? member.user?.nick;
-      const name = member.name ?? member.user?.name;
+      const nick = member.nick || member.user?.nick;
+      const name = member.name || member.user?.name;
       if (userId !== member.user?.id && userId !== nick && userId !== name) {
         return;
       }
@@ -60,7 +69,7 @@ async function getGuildMember({userId, session}: {
         nick,
         name,
       }
-      res.toString = () => res.user.id + ':' + (res.nick ?? res.name)
+      res.toString = () => res.user.id + ':' + (res.nick || res.name)
       return false;
     },
     session.bot, session.bot.getGuildMemberList,
@@ -145,58 +154,60 @@ async function handleOptionInfoData({optionInfo, option, argv}: {
 }
 
 async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv }): Promise<OptionInfoMap> {
-  const map: Record<string, OptionInfoValue> = {};
-  const infoMap: Record<string, OptionInfo> = {};
-  const fnArgs = [];
-  const expert = source.expert;
-  if (source.expertMode && expert) {
-    for (const option of expert.commandOptions) {
-      const optionInfo: OptionInfo = {
-        value: argv.options?.[option.name],
-        autoOverwrite: option.autoOverwrite,
-        overwriteKey: option.overwriteKey,
-      };
-      await handleOptionInfoData({
-        optionInfo,
-        option,
-        argv,
-      });
-      map[option.name] = optionInfo.value;
-      infoMap[option.name] = optionInfo;
-    }
-
-    for (const arg of expert.commandArgs) {
-      const i = expert.commandArgs.indexOf(arg);
-      const optionInfo: OptionInfo = {
-        value: argv.args?.[i],
-        autoOverwrite: arg.autoOverwrite,
-        overwriteKey: arg.overwriteKey,
-      }
-      await handleOptionInfoData({
-        optionInfo,
-        option: arg,
-        argv,
-      });
-      map[arg.name] = optionInfo.value;
-      infoMap[arg.name] = optionInfo;
-      map['$' + i] = optionInfo.value;
-      infoMap['$' + i] = optionInfo;
-    }
+  const optionInfoMap: OptionInfoMap = {
+    map: {},
+    infoMap: {},
+    fnArg: '{}={}',
+  }
+  if (!source.expertMode || !source.expert) {
+    return optionInfoMap;
   }
 
-  for (const key in infoMap) {
-    fnArgs.push(key);
+  for (const option of source.expert.commandOptions) {
+    const optionInfo: OptionInfo = {
+      value: argv.options?.[option.name],
+      autoOverwrite: option.autoOverwrite,
+      overwriteKey: option.overwriteKey,
+    };
+    await handleOptionInfoData({
+      optionInfo,
+      option,
+      argv,
+    });
+    optionInfoMap.map[option.name] = optionInfo.value;
+    optionInfoMap.infoMap[option.name] = optionInfo;
   }
-  return {infoMap, map, fnArg: '{' + fnArgs.join(',') + '}={}'};
+
+  for (const arg of source.expert.commandArgs) {
+    const i = source.expert.commandArgs.indexOf(arg);
+    const optionInfo: OptionInfo = {
+      value: argv.args?.[i],
+      autoOverwrite: arg.autoOverwrite,
+      overwriteKey: arg.overwriteKey,
+    }
+    await handleOptionInfoData({
+      optionInfo,
+      option: arg,
+      argv,
+    });
+    optionInfoMap.map[arg.name] = optionInfo.value;
+    optionInfoMap.infoMap[arg.name] = optionInfo;
+    optionInfoMap.map['$' + i] = optionInfo.value;
+    optionInfoMap.infoMap['$' + i] = optionInfo;
+  }
+  optionInfoMap.fnArg = '{' + Object.keys(optionInfoMap.infoMap).join(',') + '}={}';
+
+  return optionInfoMap;
 }
 
-export async function formatOption({content, presetPool, session, optionInfoMap, data}: {
+export async function formatOption(args: CmdCtx & {
   content: string,
-  presetPool: PresetPool,
-  session: Session,
-  optionInfoMap?: OptionInfoMap,
   data?: any
 }): Promise<string> {
+  let {
+    content, data,
+    presetPool, session, optionInfoMap
+  } = args;
   const contentList = [];
   content = content
     .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
@@ -207,41 +218,39 @@ export async function formatOption({content, presetPool, session, optionInfoMap,
     return content;
   }
 
-  const argTexts = ['$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
-  const args: any[] = [session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
+  const fnArgTexts = ['$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
+  const fnArgs: any[] = [session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
   if (optionInfoMap) {
-    argTexts.push(optionInfoMap.fnArg)
-    args.push(optionInfoMap.map ?? {});
+    fnArgTexts.push(optionInfoMap.fnArg);
+    fnArgs.push(optionInfoMap.map ?? {});
   }
   if (Objects.isNotNull(data)) {
-    argTexts.push('$data')
-    args.push(data);
+    fnArgTexts.push('$data');
+    fnArgs.push(data);
   }
 
   const resMap = {};
   for (let i = 0; i < contentList.length; i++) {
     const item = contentList[i];
-    resMap[i + '_' + item] = await AsyncFunction(...argTexts, 'return ' + item.replace(/\n/g, '\\n'))(...args);
+    resMap[i + '_' + item] = await AsyncFunction(...fnArgTexts, 'return ' + item.replace(/\n/g, '\\n'))(...fnArgs);
   }
 
   let i = 0;
   content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
     return resMap[i++ + '_' + p1] ?? '';
-  })
+  });
 
   return content;
 }
 
-export async function formatObjOption({obj, optionInfoMap, session, compelString, presetPool}: {
+export async function formatObjOption(args: CmdCtx & {
   obj: {},
-  optionInfoMap?: OptionInfoMap,
-  session: Session,
   compelString: boolean,
-  presetPool: PresetPool,
 }) {
+  const {obj, compelString, optionInfoMap} = args;
   await Objects.thoroughForEach(obj, async (value, key, obj) => {
     if (typeof value === 'string') {
-      obj[key] = await formatOption({content: obj[key], optionInfoMap, session, presetPool});
+      obj[key] = await formatOption({...args, content: obj[key],});
     }
   });
 
@@ -251,7 +260,7 @@ export async function formatObjOption({obj, optionInfoMap, session, compelString
     if (
       !optionInfo.autoOverwrite
       || typeof optionInfo.value === 'undefined'
-      || typeof obj[oKey] === 'undefined'
+      || typeof eval(`obj?.${oKey.replace(/(?<!\?)\./g, '?.').replace(/(?<!\?.)\[/g, '?.[')}`) === 'undefined'
     ) {
       continue;
     }
@@ -266,7 +275,6 @@ export async function formatObjOption({obj, optionInfoMap, session, compelString
 
 export default function () {
 
-  const recalls = new Set<NodeJS.Timeout>();
   let presetPool: PresetPool = {
     presetConstantPool: {},
     presetConstantPoolFnArg: '{}={}',
@@ -331,8 +339,6 @@ export default function () {
 
   function onDispose() {
     presetPool = null;
-    recalls.forEach(timeout => clearTimeout(timeout));
-    recalls.clear();
   }
 
   async function send({ctx, config, source, argv}: {
@@ -350,25 +356,21 @@ export default function () {
     }
 
     const optionInfoMap = await handleOptionInfos({source, argv});
+    const cmdCtx: CmdCtx = {ctx, config, source, presetPool, session, optionInfoMap};
 
-    const res: HTTP.Response = await cmdReq({
-      ctx, config, source, presetPool, session, optionInfoMap
-    });
+    const res: HTTP.Response = await cmdReq(cmdCtx);
     if (res.status > 300 || res.status < 200) {
       const msg = JSON.stringify(res.data);
       throw new Error(`${msg} (${res.statusText})`);
     }
 
     const resData = cmdResData(source, res);
-    const fragment: Fragment = await rendered({
-      ctx, config, source, presetPool, session, optionInfoMap, resData
-    });
+    const fragment: Fragment = await rendered({...cmdCtx, resData});
 
     if (fragment) {
       const [msg] = await session.send(fragment);
       if (source.recall > 0) {
-        const timeout = setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000);
-        recalls.add(timeout);
+        ctx.setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000);
       }
     }
   }

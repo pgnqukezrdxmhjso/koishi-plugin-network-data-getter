@@ -1,24 +1,21 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import {Context, HTTP, Session} from "koishi";
-
-import {CmdSource, Config} from "./Config";
+import {HTTP} from "koishi";
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
-import {formatObjOption, formatOption, OptionInfoMap, PresetPool} from "./Core";
+import {CmdCtx, formatObjOption, formatOption} from "./Core";
 import {getCmdHttpClient, loadUrl} from "./Http";
 
-async function handleReqExpert({ctx, config, source, presetPool, session, optionInfoMap, requestConfig,}: {
-  ctx: Context,
-  config: Config,
-  source: CmdSource,
-  presetPool: PresetPool,
-  session: Session,
-  optionInfoMap: OptionInfoMap,
+async function handleReqExpert(args: CmdCtx & {
   requestConfig: HTTP.RequestConfig,
 }) {
+  const {
+    ctx, config, source, optionInfoMap,
+    requestConfig
+  } = args;
+
   let expert = source.expert;
   if (!source.expertMode || !expert) {
     return;
@@ -26,8 +23,9 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
 
   requestConfig.headers = {...(expert.requestHeaders || {})};
   await formatObjOption({
+    ...args,
     obj: requestConfig.headers,
-    optionInfoMap, session, compelString: true, presetPool
+    compelString: true
   });
 
   switch (expert.requestDataType) {
@@ -38,13 +36,12 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
       if (expert.requestJson) {
         requestConfig.data = JSON.parse(expert.requestRaw);
         await formatObjOption({
+          ...args,
           obj: requestConfig.data,
-          optionInfoMap, session, compelString: false, presetPool
+          compelString: false
         });
       } else {
-        requestConfig.data = await formatOption({
-          content: expert.requestRaw, optionInfoMap, session, presetPool
-        });
+        requestConfig.data = await formatOption({...args, content: expert.requestRaw});
       }
       break;
     }
@@ -53,8 +50,9 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
         break;
       }
       requestConfig.data = new URLSearchParams(await formatObjOption({
+        ...args,
         obj: {...expert.requestForm},
-        optionInfoMap, session, compelString: true, presetPool
+        compelString: true
       }));
       break;
     }
@@ -65,8 +63,9 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
       const form = new FormData();
       requestConfig.data = form;
       const data = await formatObjOption({
+        ...args,
         obj: {...(expert.requestForm || {})},
-        optionInfoMap, session, compelString: true, presetPool
+        compelString: true
       });
       for (let key in data) {
         form.append(key, data[key]);
@@ -86,7 +85,8 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
         }
 
         const fileRes = await loadUrl({
-          isPlatform: true, ctx, config, presetPool, session,
+          ...args,
+          isPlatform: true,
           url: optionInfo.value as string,
           reqConfig: {
             responseType: "blob",
@@ -111,23 +111,13 @@ async function handleReqExpert({ctx, config, source, presetPool, session, option
   }
 }
 
-export async function cmdReq({ctx, config, source, presetPool, session, optionInfoMap}: {
-  ctx: Context,
-  config: Config,
-  source: CmdSource,
-  presetPool: PresetPool,
-  session: Session,
-  optionInfoMap: OptionInfoMap
-}) {
+export async function cmdReq(cmdCtx: CmdCtx) {
   const requestConfig: HTTP.RequestConfig = {};
-  await handleReqExpert({
-    ctx, config, source, presetPool,
-    session, optionInfoMap, requestConfig
-  });
-  const httpClient = getCmdHttpClient({ctx, config, source});
+  await handleReqExpert({...cmdCtx, requestConfig});
+  const httpClient = getCmdHttpClient({ctx: cmdCtx.ctx, config: cmdCtx.config, source: cmdCtx.source});
   return await httpClient(
-    source.requestMethod,
-    await formatOption({content: source.sourceUrl, optionInfoMap, session, presetPool}),
+    cmdCtx.source.requestMethod,
+    await formatOption({...cmdCtx, content: cmdCtx.source.sourceUrl}),
     requestConfig
   );
 }

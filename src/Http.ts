@@ -1,7 +1,7 @@
 import {Context, Dict, HTTP, Session} from "koishi";
 import {CmdSource, Config, PlatformResource, ProxyConfig} from "./Config";
 import Strings from "./utils/Strings";
-import {formatObjOption, OptionInfoMap, PresetPool} from "./Core";
+import {CmdCtx, formatObjOption} from "./Core";
 import Objects from "./utils/Objects";
 
 interface PlatformHttpClient {
@@ -67,17 +67,18 @@ export function getPlatformHttpClient({ctx, config, session}: {
   };
 }
 
-export async function loadUrl({isPlatform, ctx, config, source, presetPool, session, optionInfoMap, url, reqConfig}: {
-  isPlatform: boolean
-  ctx: Context,
-  config: Config,
-  source?: CmdSource,
-  presetPool: PresetPool,
-  session: Session,
-  optionInfoMap?: OptionInfoMap,
-  url: string,
-  reqConfig?: HTTP.RequestConfig
-}) {
+export async function loadUrl(
+  args: CmdCtx & {
+    isPlatform: boolean
+    url: string,
+    reqConfig?: HTTP.RequestConfig
+  }
+) {
+  let {
+    isPlatform, url, reqConfig,
+    ctx, config, source,
+    presetPool, session, optionInfoMap
+  } = args;
   let headers: Dict<string> = {};
   let httpClient: HTTP;
   if (!isPlatform) {
@@ -94,8 +95,9 @@ export async function loadUrl({isPlatform, ctx, config, source, presetPool, sess
   }
   if (Objects.isNotEmpty(headers)) {
     await formatObjOption({
+      ...args,
       obj: headers,
-      optionInfoMap, session, compelString: true, presetPool
+      compelString: true,
     });
   }
   if (!reqConfig) {
@@ -109,20 +111,12 @@ export async function loadUrl({isPlatform, ctx, config, source, presetPool, sess
 }
 
 export async function urlToBase64(
-  {isPlatform, ctx, config, source, presetPool, session, optionInfoMap, url, reqConfig}: {
+  args: CmdCtx & {
     isPlatform: boolean
-    ctx: Context,
-    config: Config,
-    source?: CmdSource,
-    presetPool: PresetPool,
-    session: Session,
-    optionInfoMap: OptionInfoMap,
     url: string,
     reqConfig?: HTTP.RequestConfig
   }
 ) {
-  const res = await loadUrl({
-    isPlatform, ctx, config, source, presetPool, session, optionInfoMap, url, reqConfig
-  });
+  const res = await loadUrl(args);
   return `data:${res.headers.get('Content-Type')};base64,` + Buffer.from(res.data).toString('base64');
 }
