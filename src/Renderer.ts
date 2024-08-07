@@ -3,7 +3,7 @@ import {render} from 'ejs'
 
 import {RendererType} from "./Config";
 import {urlToBase64} from "./Http";
-import {CmdCtx, formatOption} from "./Core";
+import {buildInternalFns, CmdCtx, formatOption} from "./Core";
 import Strings from "./utils/Strings";
 import {ResData} from "./CmdResData";
 import {logger} from "./logger";
@@ -48,29 +48,28 @@ const rendererMap: { [key in RendererType]: Renderer } = {
   },
 
   'ejs': {
-    build: async (
-      {resData, source, presetPool, session, optionInfoMap}
-    ) => {
+    build: async (args) => {
+      const {resData, source, presetPool, session, optionInfoMap} = args;
       try {
         const data = resData.json ?? resData.text ?? resData.texts;
-        const {ejsTemplate} = source;
-        if (ejsTemplate) {
-          let code = await render(ejsTemplate, {
-            $e: session.event,
-            data,
-            $data: data,
-            ...(presetPool.presetConstantPool ?? {}),
-            ...(presetPool.presetFnPool ?? {}),
-            ...(optionInfoMap.map ?? {}),
-          }, {
-            async: true,
-            rmWhitespace: true
-          });
-          code = code.replace(/\n\n/g, '\n');
-          return code;
-        } else {
+        if (!source.ejsTemplate) {
           return JSON.stringify(data);
         }
+        const iFns = buildInternalFns(args);
+        let code = await render(source.ejsTemplate, {
+          $e: session.event,
+          data,
+          ...iFns.fns,
+          ...(presetPool.presetConstantPool ?? {}),
+          ...(presetPool.presetFnPool ?? {}),
+          ...(optionInfoMap.map ?? {}),
+          $data: data,
+        }, {
+          async: true,
+          rmWhitespace: true
+        });
+        code = code.replace(/\n\n/g, '\n');
+        return code;
       } catch (err) {
         logger.error('Error while parsing ejs data and json:');
         logger.error(err);
@@ -118,7 +117,6 @@ export async function rendered(args: CmdCtx & {
   ) {
     resData.text = await urlToBase64({
       ...args,
-      isPlatform: false,
       url: resData.text,
       reqConfig: {
         headers: source.expertMode ? source.expert.rendererRequestHeaders : undefined

@@ -86,7 +86,6 @@ async function handleReqExpert(args: CmdCtx & {
 
         const fileRes = await loadUrl({
           ...args,
-          isPlatform: true,
           url: optionInfo.value as string,
           reqConfig: {
             responseType: "blob",

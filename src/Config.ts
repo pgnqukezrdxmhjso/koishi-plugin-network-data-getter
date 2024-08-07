@@ -363,7 +363,10 @@ export const Config: Schema<Config> = Schema.intersect([
                 '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
                 '**<%= %>** 中允許使用 `js程式碼` `預設常量` `預設函式` 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`  \n' +
                 '`指令鏈` `EJS 模板` 配置項中可額外使用  \n' +
-                '**<%=$data%>** 插入返回的資料'
+                '**<%=$data%>** 插入返回的資料  \n' +
+                '內建函式  \n' +
+                '**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/b2da31b7cfef8b8490961037b2ba08c6efc6d03f/packages/core/src/index.ts#L99)  \n' +
+                '**await $urlToBase64({url,reqConfig})**  \n'
               ),
               requestHeaders: Schema.dict(String).role('table').default({}).description('請求頭'),
               requestDataType:

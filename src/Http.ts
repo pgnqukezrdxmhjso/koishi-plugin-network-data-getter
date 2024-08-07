@@ -69,27 +69,36 @@ export function getPlatformHttpClient({ctx, config, session}: {
 
 export async function loadUrl(
   args: CmdCtx & {
-    isPlatform: boolean
     url: string,
     reqConfig?: HTTP.RequestConfig
   }
 ) {
   let {
-    isPlatform, url, reqConfig,
+    url, reqConfig,
     ctx, config, source,
-    presetPool, session, optionInfoMap
+    session
   } = args;
   let headers: Dict<string> = {};
   let httpClient: HTTP;
+  let isPlatform = false;
+  for (let key in args.optionInfoMap.infoMap) {
+    const info = args.optionInfoMap.infoMap[key];
+    if (info.isFileUrl && info.value === url) {
+      isPlatform = true;
+      break;
+    }
+  }
+
   if (!isPlatform) {
     httpClient = getCmdHttpClient({ctx, config, source});
   } else {
-    let platformHttpClient = getPlatformHttpClient({ctx, config, session});
+    const platformHttpClient = getPlatformHttpClient({ctx, config, session});
     httpClient = platformHttpClient.client;
     if (Objects.isNotEmpty(platformHttpClient?.config?.requestHeaders)) {
       headers = {...headers, ...platformHttpClient.config.requestHeaders};
     }
   }
+
   if (Objects.isNotEmpty(reqConfig?.headers)) {
     headers = {...headers, ...reqConfig.headers};
   }
@@ -112,7 +121,6 @@ export async function loadUrl(
 
 export async function urlToBase64(
   args: CmdCtx & {
-    isPlatform: boolean
     url: string,
     reqConfig?: HTTP.RequestConfig
   }

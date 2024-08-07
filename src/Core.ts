@@ -15,6 +15,7 @@ import {Channel, GuildMember} from "@satorijs/protocol";
 import Strings from "./utils/Strings";
 import KoishiUtil from "./utils/KoishiUtil";
 import Objects from "./utils/Objects";
+import {loadUrl, urlToBase64} from "./Http";
 
 
 export interface PresetPool {
@@ -200,6 +201,49 @@ async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv
   return optionInfoMap;
 }
 
+
+const internalFns: { [key in string]: Function } = {
+  async urlToString(cmdCtx: CmdCtx, args: {
+    url: string,
+    reqConfig?: HTTP.RequestConfig
+  }) {
+    const res = await loadUrl({...cmdCtx, ...args});
+    if (typeof res.data === "string") {
+      return res.data;
+    }
+    return Buffer.from(res.data).toString('latin1');
+  },
+  async urlToBase64(cmdCtx: CmdCtx, args: {
+    url: string,
+    reqConfig?: HTTP.RequestConfig
+  }) {
+    return urlToBase64({...cmdCtx, ...args});
+  }
+}
+
+function purifyCmdCtx(cmdCtx: CmdCtx) {
+  return {
+    ctx: cmdCtx.ctx,
+    config: cmdCtx.config,
+    source: cmdCtx.source,
+    presetPool: cmdCtx.presetPool,
+    session: cmdCtx.session,
+    optionInfoMap: cmdCtx.optionInfoMap,
+  }
+}
+
+export function buildInternalFns(cmdCtx: CmdCtx) {
+  cmdCtx = purifyCmdCtx(cmdCtx);
+  const fns = {}
+  for (let name in internalFns) {
+    fns['$' + name] = internalFns[name].bind(null, cmdCtx);
+  }
+  return {
+    fns,
+    arg: `{${Object.keys(fns).join(',')}}`
+  };
+}
+
 export async function formatOption(args: CmdCtx & {
   content: string,
   data?: any
@@ -218,8 +262,9 @@ export async function formatOption(args: CmdCtx & {
     return content;
   }
 
-  const fnArgTexts = ['$e', presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
-  const fnArgs: any[] = [session.event, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
+  const iFns = buildInternalFns(args);
+  const fnArgTexts = ['$e', iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
+  const fnArgs: any[] = [session.event, iFns.fns, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
   if (optionInfoMap) {
     fnArgTexts.push(optionInfoMap.fnArg);
     fnArgs.push(optionInfoMap.map ?? {});
@@ -250,7 +295,7 @@ export async function formatObjOption(args: CmdCtx & {
   const {obj, compelString, optionInfoMap} = args;
   await Objects.thoroughForEach(obj, async (value, key, obj) => {
     if (typeof value === 'string') {
-      obj[key] = await formatOption({...args, content: obj[key],});
+      obj[key] = await formatOption({...args, content: obj[key]});
     }
   });
 
