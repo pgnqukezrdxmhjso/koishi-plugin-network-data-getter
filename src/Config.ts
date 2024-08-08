@@ -56,6 +56,7 @@ export interface CmdSource {
   jsonKey?: string;
   jquerySelector?: string;
   attribute?: string;
+  pickOneRandomly?: boolean;
 
   sendType: RendererType;
   ejsTemplate?: string;
@@ -232,23 +233,30 @@ export const Config: Schema<Config> = Schema.intersect([
         dataType: Schema.union([
           Schema.const('json').description('JSON'),
           Schema.const('txt').description('多行文字'),
-          Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
           Schema.const('html').description('HTML 文字'),
+          Schema.const('resource').description('資源 (圖片/影片/音訊等)'),
           Schema.const('plain').description('JSONRaw')
         ]).default('txt').description('資料返回型別'),
       }),
       Schema.union([
         Schema.object({
           dataType: Schema.const('json').required(),
-          jsonKey: Schema.string().description('使用JS程式碼進行巢狀取值, 支援使用[]代表迭代元素')
+          jsonKey: Schema.string().description('使用JS程式碼進行巢狀取值, 支援使用[]代表迭代元素'),
+          pickOneRandomly: Schema.boolean().default(true).description('從多行結果中隨機選擇一條')
+        }),
+        Schema.object({
+          dataType: Schema.const('txt'),
+          pickOneRandomly: Schema.boolean().default(true).description('從多行結果中隨機選擇一條')
         }),
         Schema.object({
           dataType: Schema.const('html').required(),
           jquerySelector: Schema.string().default('p').description('jQuery 選擇器'),
-          attribute: Schema.string().default('').description('要提取的 HTML 元素屬性, 數值為空時獲取HTML元素內文字')
+          attribute: Schema.string().default('').description('要提取的 HTML 元素屬性, 數值為空時獲取HTML元素內文字'),
+          pickOneRandomly: Schema.boolean().default(true).description('從多行結果中隨機選擇一條')
         }),
         Schema.object({} as any)
       ]),
+
       Schema.object({
         sendType: Schema.union([
           Schema.const('text').description('文字'),
@@ -357,14 +365,14 @@ export const Config: Schema<Config> = Schema.intersect([
                 ]),
               ])).collapse().description('選項配置'),
               _prompt: Schema.never().description(
-                '`請求地址` `請求頭` `請求資料` `指令鏈` `EJS 模板` 配置項中可使用  \n' +
+                '#請求地址 | 請求頭 | 請求資料 | 指令鏈 | EJS 模板 配置項中可使用  \n' +
                 '**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n' +
                 '**<%=名稱%>** 插入同名的預設常量或引數或選項  \n' +
                 '**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n' +
-                '**<%= %>** 中允許使用 `js程式碼` `預設常量` `預設函式` 例如 `<%=JSON.stringify($e)%>` `<%=$0 || $1%>`  \n' +
-                '`指令鏈` `EJS 模板` 配置項中可額外使用  \n' +
+                '**<%= %>** 中允許使用 js程式碼 | 內建函式 | 預設常量 | 預設函式 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n' +
+                '#指令鏈 | EJS 模板 配置項中可額外使用  \n' +
                 '**<%=$data%>** 插入返回的資料  \n' +
-                '內建函式  \n' +
+                '#內建函式  \n' +
                 '**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/b2da31b7cfef8b8490961037b2ba08c6efc6d03f/packages/core/src/index.ts#L99)  \n' +
                 '**await $urlToBase64({url,reqConfig})**  \n'
               ),

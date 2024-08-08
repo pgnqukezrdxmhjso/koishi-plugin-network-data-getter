@@ -15,7 +15,7 @@ export function parseObjectToArr(data: any): any[] {
 }
 
 export function parseJson(data: any, key: string): any[] {
-    let target = data;
+    let target: any;
     const [prefix, ...suffix] = key.split('[]')
     target = !!prefix ? prefix.startsWith('[')
         ? eval(`data${prefix}`)

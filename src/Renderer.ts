@@ -1,57 +1,83 @@
-import {Fragment, h, Random} from "koishi";
+import {Fragment, h} from "koishi";
 import {render} from 'ejs'
 
-import {RendererType} from "./Config";
-import {urlToBase64} from "./Http";
 import {buildInternalFns, CmdCtx, formatOption} from "./Core";
+import {RendererType} from "./Config";
 import Strings from "./utils/Strings";
 import {ResData} from "./CmdResData";
+import {urlToBase64} from "./Http";
 import {logger} from "./logger";
 
 
 interface Renderer {
-  isMedia?: boolean;
   verify?: (s: string) => boolean;
   build: (args: CmdCtx & {
     resData: ResData;
   }) => Promise<Fragment>;
 }
 
-const rendererMap: { [key in RendererType]: Renderer } = {
+function buildMedia(type: string,) {
+  return async (args: CmdCtx & {
+    resData: ResData;
+  }) => {
+    const {resData, source} = args;
+    if (!resData.texts) {
+      throw '沒有符合條件的結果';
+    }
+    const elements = [];
+
+    for (let text of resData.texts) {
+      if ((source.expertMode && !source.expert.renderedMediaUrlToBase64)
+        || !text?.startsWith?.('http')
+      ) {
+        elements.push(text);
+      } else {
+        elements.push(
+          await urlToBase64({
+            ...args,
+            url: text,
+            reqConfig: {
+              headers: source.expertMode ? source.expert.rendererRequestHeaders : undefined
+            }
+          })
+        );
+      }
+    }
+
+    return elements.map(text => h[type](text)).join('');
+  }
+}
+
+export const rendererMap: { [key in RendererType]: Renderer } = {
   'text': {
-    verify: (s: string) => s.length > 0,
-    build: async ({resData}) => resData.text
+    build: async ({resData}) => {
+      if (!resData.texts) {
+        return JSON.stringify(resData.json);
+      }
+      return resData.texts.map(text => `<p>${text}</p>`).join('');
+    }
   },
-
   'image': {
-    isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:image/'),
-    build: async ({resData}) => h.img(resData.text)
+    build: buildMedia('img')
   },
-
   'audio': {
-    isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:audio/'),
-    build: async ({resData}) => h.audio(resData.text)
+    build: buildMedia('audio')
   },
-
   'video': {
-    isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:video/'),
-    build: async ({resData}) => h.video(resData.text)
+    build: buildMedia('video')
   },
-
   'file': {
-    isMedia: true,
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:'),
-    build: async ({resData}) => h.file(resData.text)
+    build: buildMedia('file')
   },
-
   'ejs': {
     build: async (args) => {
       const {resData, source, presetPool, session, optionInfoMap} = args;
       try {
-        const data = resData.json ?? resData.text ?? resData.texts;
+        const data = resData.json ?? resData.texts;
         if (!source.ejsTemplate) {
           return JSON.stringify(data);
         }
@@ -85,7 +111,7 @@ const rendererMap: { [key in RendererType]: Renderer } = {
       const cmdLink = await formatOption({
         ...args,
         content: args.source.cmdLink,
-        data: args.resData.json ?? args.resData.text ?? args.resData.texts
+        data: args.resData.json ?? args.resData.texts
       });
       await args.session.execute(cmdLink);
       return null;
@@ -102,29 +128,6 @@ export async function rendered(args: CmdCtx & {
   if (!renderer) {
     throw (`不支援的渲染型別: ${source.sendType}`);
   }
-  if (resData.texts) {
-    const selected = Random.pick(
-      !renderer.verify ? resData.texts : resData.texts.filter(s => renderer.verify(s))
-    );
-    if (Strings.isEmpty(selected)) {
-      throw ('沒有符合條件的結果');
-    }
-    resData.text = selected;
-  }
-  if (renderer.isMedia
-    && (!source.expertMode || source.expert.renderedMediaUrlToBase64)
-    && resData.text?.startsWith?.('http')
-  ) {
-    resData.text = await urlToBase64({
-      ...args,
-      url: resData.text,
-      reqConfig: {
-        headers: source.expertMode ? source.expert.rendererRequestHeaders : undefined
-      }
-    });
-  }
 
   return await renderer.build(args);
 }
-
-
