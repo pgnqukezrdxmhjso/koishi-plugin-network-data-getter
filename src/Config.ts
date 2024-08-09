@@ -4,16 +4,18 @@ import PresetFns from './PresetFns'
 import fs from "node:fs";
 import path from "node:path";
 
-export type BaseProcessorType = 'json' | 'txt' | 'html' | 'plain' | 'resource'
-export type RendererType = 'text' | 'image' | 'audio' | 'video' | 'file' | 'ejs' | 'cmdLink'
-export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw'
-export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL'
+export type BaseProcessorType = 'json' | 'txt' | 'html' | 'plain' | 'resource';
+export type RendererType = 'text' | 'image' | 'audio' | 'video' | 'file' | 'ejs' | 'cmdLink';
+export type RequestDataType = 'empty' | 'form-data' | 'x-www-form-urlencoded' | 'raw';
+export type ProxyType = 'NONE' | 'GLOBAL' | 'MANUAL';
 export type OptionValue = boolean | string | number;
+export type CommandType = 'string' | 'number' | 'user' | 'channel' | 'text';
+export type MessagePackingType = 'none' | 'multiple' | 'all';
 
 export interface CommandArg {
   name: string;
   desc?: string;
-  type: 'string' | 'number' | 'user' | 'channel' | 'text';
+  type: CommandType;
   required: boolean;
   autoOverwrite: boolean;
   overwriteKey?: string;
@@ -23,7 +25,7 @@ export interface CommandOption {
   name: string;
   acronym?: string;
   desc?: string;
-  type: 'boolean' | 'string' | 'number' | 'user' | 'channel' | 'text';
+  type: 'boolean' | CommandType;
   value?: OptionValue;
   autoOverwrite: boolean;
   overwriteKey?: string;
@@ -48,6 +50,7 @@ export interface CmdSource {
   alias: string[];
   desc: string;
   reverseGettingTips?: boolean;
+  messagePackingType: 'inherit' | MessagePackingType;
   recall?: number;
   sourceUrl: string;
   requestMethod: HTTP.Method;
@@ -100,6 +103,7 @@ export interface ConfigExpert extends ProxyConfig {
 export interface Config {
   anonymousStatistics: boolean;
   gettingTips: boolean;
+  messagePackingType: MessagePackingType;
   expertMode: boolean;
   expert?: ConfigExpert;
   sources: CmdSource[];
@@ -154,6 +158,11 @@ export const Config: Schema<Config> = Schema.intersect([
       }).collapse().description('更新歷史'),
       anonymousStatistics: Schema.boolean().default(true).description('匿名資料統計（記錄插件啟用的次數）'),
       gettingTips: Schema.boolean().default(true).description('獲取中提示'),
+      messagePackingType: Schema.union([
+        Schema.const('none').description('不合並'),
+        Schema.const('multiple').description('合併多條'),
+        Schema.const('all').description('全部合併'),
+      ]).default('none').description('訊息合併'),
       expertMode: Schema.boolean().default(false).description('專家模式'),
     }).description('基礎設定'),
     Schema.union([
@@ -224,6 +233,12 @@ export const Config: Schema<Config> = Schema.intersect([
         alias: Schema.array(Schema.string()).default([]).description('指令別名'),
         desc: Schema.string().description('指令描述'),
         reverseGettingTips: Schema.boolean().default(false).description('對獲取中提示狀態取反'),
+        messagePackingType: Schema.union([
+          Schema.const('inherit').description('繼承'),
+          Schema.const('none').description('不合並'),
+          Schema.const('multiple').description('合併多條'),
+          Schema.const('all').description('全部合併'),
+        ]).description('訊息合併'),
         recall: Schema.number().default(0).description('訊息撤回時限(分鐘,0為不撤回)'),
         sourceUrl: Schema.string().role('textarea', {rows: [1, 9]}).required().description('請求地址'),
         requestMethod: Schema.union(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'PURGE', 'LINK', 'UNLINK']).default('GET')

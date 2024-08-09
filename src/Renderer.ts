@@ -44,36 +44,36 @@ function buildMedia(type: string,) {
       }
     }
 
-    return elements.map(text => h[type](text)).join('');
+    return h.parse(elements.map(text => h[type](text)).join(''));
   }
 }
 
 export const rendererMap: { [key in RendererType]: Renderer } = {
-  'text': {
+  text: {
     build: async ({resData}) => {
       if (!resData.texts) {
         return JSON.stringify(resData.json);
       }
-      return resData.texts.map(text => `<p>${text}</p>`).join('');
+      return h.parse(resData.texts.map(text => `<p>${text}</p>`).join(''));
     }
   },
-  'image': {
+  image: {
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:image/'),
     build: buildMedia('img')
   },
-  'audio': {
+  audio: {
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:audio/'),
     build: buildMedia('audio')
   },
-  'video': {
+  video: {
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:video/'),
     build: buildMedia('video')
   },
-  'file': {
+  file: {
     verify: (s: string) => s.startsWith('http') || s.startsWith('data:'),
     build: buildMedia('file')
   },
-  'ejs': {
+  ejs: {
     build: async (args) => {
       const {resData, source, presetPool, session, optionInfoMap} = args;
       try {
@@ -103,7 +103,7 @@ export const rendererMap: { [key in RendererType]: Renderer } = {
       }
     }
   },
-  'cmdLink': {
+  cmdLink: {
     build: async (args) => {
       if (Strings.isBlank(args.source.cmdLink)) {
         return null;
@@ -119,15 +119,44 @@ export const rendererMap: { [key in RendererType]: Renderer } = {
   }
 }
 
+function handleMsgPacking(args: CmdCtx, fragment: Fragment): Fragment {
+  if (!fragment) {
+    return fragment;
+  }
+  const {config, source} = args;
+  let msgPackingType = source.messagePackingType || config.messagePackingType;
+  if (msgPackingType === 'inherit') {
+    msgPackingType = config.messagePackingType;
+  }
+  if (!msgPackingType || msgPackingType === 'none') {
+    return fragment;
+  }
+  if (!(fragment instanceof Array)) {
+    fragment = [fragment];
+  }
+  if (msgPackingType === 'multiple' && fragment.length < 2) {
+    return fragment;
+  }
+
+  const forward = h.parse('<message forward></message>');
+  forward[0].children = fragment.map(f => {
+    if (typeof f === 'string') {
+      return h.parse(`<message>${f}</message>`)[0];
+    }
+    const message = h.parse(`<message></message>`)[0];
+    message.children = f instanceof Array ? f : [f];
+    return message;
+  });
+  return forward;
+}
 
 export async function rendered(args: CmdCtx & {
   resData: ResData,
 }) {
-  const {source, resData} = args;
+  const {source} = args;
   const renderer = rendererMap[source.sendType]
   if (!renderer) {
     throw (`不支援的渲染型別: ${source.sendType}`);
   }
-
-  return await renderer.build(args);
+  return handleMsgPacking(args, await renderer.build(args));
 }
