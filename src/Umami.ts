@@ -3,7 +3,7 @@ import {logger} from "./logger";
 import {Context, version} from "koishi";
 import packageJson from "../package.json"
 
-const dataHostUrl: string = 'https://data.itzdrli.com';
+const dataHostUrl: string = 'https://data.itzdrli.cc';
 const website: string = "a7f48881-235d-4ddd-821a-029993ef32e9";
 
 interface Payload {

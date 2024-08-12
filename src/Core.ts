@@ -360,15 +360,16 @@ export default function () {
       if (!presetFn) {
         return
       }
-      const fn =
-        (presetFn.async ? AsyncFunction : Function)(
-          '{crypto,OTPAuth,http}', presetPool.presetConstantPoolFnArg, presetFn.args, presetFn.body
-        );
-      presetPool.presetFnPool[presetFn.name] = fn.bind(fn, {
+      const moduleMap = {
         crypto,
         OTPAuth,
         http: ctx.http
-      }, presetPool.presetConstantPool ?? {});
+      };
+
+      const fn = (presetFn.async ? AsyncFunction : Function)(
+        `{${Object.keys(moduleMap).join(',')}}`, presetPool.presetConstantPoolFnArg, presetFn.args, presetFn.body
+      );
+      presetPool.presetFnPool[presetFn.name] = fn.bind(fn, moduleMap, presetPool.presetConstantPool ?? {});
     });
     presetPool.presetFnPoolFnArg = '{' + Object.keys(presetPool.presetFnPool).join(',') + '}={}';
   }
