@@ -7,12 +7,13 @@ import Objects from "./utils/Objects";
 import Files from "./utils/Files";
 import {CmdCtx, formatObjOption, formatOption} from "./Core";
 import {getCmdHttpClient, loadUrl} from "./Http";
+import {debugInfo} from "./logger";
 
 async function handleReqExpert(args: CmdCtx & {
   requestConfig: HTTP.RequestConfig,
 }) {
   const {
-    ctx, config, source, optionInfoMap,
+    ctx, source, optionInfoMap,
     requestConfig
   } = args;
 
@@ -110,15 +111,53 @@ async function handleReqExpert(args: CmdCtx & {
   }
 }
 
+function reqDataToJson(data: any) {
+  if (!data) {
+    return data;
+  }
+  if (data instanceof FormData) {
+    const newData = {}
+    for (let datum of data) {
+      const [key, value] = datum;
+      if (value instanceof Blob) {
+        newData[key] = value.name;
+      } else {
+        newData[key] = value;
+      }
+    }
+    return newData;
+  }
+  if (data instanceof URLSearchParams) {
+    return data.toString();
+  }
+  return data;
+}
+
+function reqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
+  debugInfo(cmdCtx, () => {
+      const rc = {...requestConfig};
+      rc.data = reqDataToJson(rc.data);
+      return `cmdNetReq; ${cmdCtx.session.content}\n`
+        + `url: ${url}\n`
+        + `method: ${cmdCtx.source.requestMethod}\n`
+        + `config: ${JSON.stringify(rc, null, 2)}`;
+    }
+  )
+}
+
 export async function cmdReq(cmdCtx: CmdCtx) {
   const requestConfig: HTTP.RequestConfig = {};
   await handleReqExpert({...cmdCtx, requestConfig});
   const httpClient = getCmdHttpClient({ctx: cmdCtx.ctx, config: cmdCtx.config, source: cmdCtx.source});
-  return await httpClient(
+  const url = await formatOption({...cmdCtx, content: cmdCtx.source.sourceUrl});
+  reqLog(cmdCtx, url, requestConfig);
+  const res = await httpClient(
     cmdCtx.source.requestMethod,
-    await formatOption({...cmdCtx, content: cmdCtx.source.sourceUrl}),
+    url,
     requestConfig
   );
+  debugInfo(cmdCtx, () => `cmdNetRes; ${cmdCtx.session.content}\n${JSON.stringify(res, null, 1)}`);
+  return res;
 }
 
 

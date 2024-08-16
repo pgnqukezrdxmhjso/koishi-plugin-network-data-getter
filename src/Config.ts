@@ -95,6 +95,7 @@ export interface PlatformResource extends ProxyConfig {
 }
 
 export interface ConfigExpert extends ProxyConfig {
+  showDebugInfo: boolean;
   platformResourceList?: PlatformResource[];
   presetConstants: PresetConstant[];
   presetFns: PresetFn[];
@@ -171,6 +172,7 @@ export const Config: Schema<Config> = Schema.intersect([
         expert: Schema.intersect([
           ...proxyConfigSchema(),
           Schema.object({
+            showDebugInfo: Schema.boolean().default(false),
             platformResourceList: Schema.array(Schema.intersect([
               Schema.object({
                 name: Schema.string().required().description('平臺名'),
