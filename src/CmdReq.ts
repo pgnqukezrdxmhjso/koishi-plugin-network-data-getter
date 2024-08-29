@@ -159,7 +159,7 @@ export async function cmdReq(cmdCtx: CmdCtx) {
     res = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
   } catch (e) {
     if (httpClient.isError(e)) {
-      throw new Error(`${e.response.statusText} ${JSON.stringify(e.response.data)}`);
+      throw new Error(`${e.response?.statusText} ${JSON.stringify(e.response?.data)}`);
     }
     throw e;
   }
