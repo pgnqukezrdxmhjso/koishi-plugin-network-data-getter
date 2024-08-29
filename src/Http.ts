@@ -1,29 +1,26 @@
-import {Context, Dict, HTTP, Session} from "koishi";
-import {CmdSource, Config, PlatformResource, ProxyConfig} from "./Config";
+import { Context, Dict, HTTP, Session } from "koishi";
+import { CmdSource, Config, PlatformResource, ProxyConfig } from "./Config";
 import Strings from "./utils/Strings";
-import {CmdCtx, formatObjOption} from "./Core";
+import { CmdCtx, formatObjOption } from "./Core";
 import Objects from "./utils/Objects";
 
 interface PlatformHttpClient {
   client: HTTP;
-  config?: PlatformResource
+  config?: PlatformResource;
 }
 
-function buildHttpClient({ctx, proxyConfig}: {
-  ctx: Context,
-  proxyConfig: ProxyConfig,
-}): HTTP {
+function buildHttpClient({ ctx, proxyConfig }: { ctx: Context; proxyConfig: ProxyConfig }): HTTP {
   switch (proxyConfig.proxyType) {
     case "NONE": {
       return ctx.http.extend({
         timeout: proxyConfig.timeout,
-        ...{proxyAgent: undefined}
+        ...{ proxyAgent: undefined },
       });
     }
     case "MANUAL": {
       return ctx.http.extend({
         timeout: proxyConfig.timeout,
-        ...{proxyAgent: proxyConfig.proxyAgent}
+        ...{ proxyAgent: proxyConfig.proxyAgent },
       });
     }
     case "GLOBAL":
@@ -33,55 +30,53 @@ function buildHttpClient({ctx, proxyConfig}: {
   }
 }
 
-export function getCmdHttpClient({ctx, config, source}: {
-  ctx: Context,
-  config: Config,
-  source: CmdSource,
-}): HTTP {
-  const proxyConfig: ProxyConfig = (config.expertMode && config.expert) ? config.expert : {proxyType: 'GLOBAL'};
-  let cmdHttpClient: HTTP = buildHttpClient({ctx, proxyConfig});
+export function getCmdHttpClient({ ctx, config, source }: { ctx: Context; config: Config; source: CmdSource }): HTTP {
+  const proxyConfig: ProxyConfig = config.expertMode && config.expert ? config.expert : { proxyType: "GLOBAL" };
+  const cmdHttpClient: HTTP = buildHttpClient({ ctx, proxyConfig });
   if (!source.expertMode || Strings.isBlank(source.expert?.proxyAgent)) {
     return cmdHttpClient;
   }
   return cmdHttpClient.extend({
-    ...{proxyAgent: source.expert.proxyAgent} as any
+    ...({ proxyAgent: source.expert.proxyAgent } as any),
   });
 }
 
-export function getPlatformHttpClient({ctx, config, session}: {
-  ctx: Context,
-  config: Config,
-  session: Session,
+export function getPlatformHttpClient({
+  ctx,
+  config,
+  session,
+}: {
+  ctx: Context;
+  config: Config;
+  session: Session;
 }): PlatformHttpClient {
   if (!config.expertMode) {
-    return {client: ctx.http};
+    return { client: ctx.http };
   }
-  const platformResource =
-    config.expert?.platformResourceList?.find(platformResource => platformResource.name === session.platform);
+  const platformResource = config.expert?.platformResourceList?.find(
+    (platformResource) => platformResource.name === session.platform,
+  );
   if (!platformResource) {
-    return {client: ctx.http};
+    return { client: ctx.http };
   }
   return {
-    client: buildHttpClient({ctx, proxyConfig: platformResource}),
-    config: platformResource
+    client: buildHttpClient({ ctx, proxyConfig: platformResource }),
+    config: platformResource,
   };
 }
 
 export async function loadUrl(
   args: CmdCtx & {
-    url: string,
-    reqConfig?: HTTP.RequestConfig
-  }
+    url: string;
+    reqConfig?: HTTP.RequestConfig;
+  },
 ) {
-  let {
-    url, reqConfig,
-    ctx, config, source,
-    session
-  } = args;
+  const { url, ctx, config, source, session } = args;
+  let { reqConfig } = args;
   let headers: Dict<string> = {};
   let httpClient: HTTP;
   let isPlatform = false;
-  for (let key in args.optionInfoMap.infoMap) {
+  for (const key in args.optionInfoMap.infoMap) {
     const info = args.optionInfoMap.infoMap[key];
     if (info.isFileUrl && info.value === url) {
       isPlatform = true;
@@ -90,17 +85,17 @@ export async function loadUrl(
   }
 
   if (!isPlatform) {
-    httpClient = getCmdHttpClient({ctx, config, source});
+    httpClient = getCmdHttpClient({ ctx, config, source });
   } else {
-    const platformHttpClient = getPlatformHttpClient({ctx, config, session});
+    const platformHttpClient = getPlatformHttpClient({ ctx, config, session });
     httpClient = platformHttpClient.client;
     if (Objects.isNotEmpty(platformHttpClient?.config?.requestHeaders)) {
-      headers = {...headers, ...platformHttpClient.config.requestHeaders};
+      headers = { ...headers, ...platformHttpClient.config.requestHeaders };
     }
   }
 
   if (Objects.isNotEmpty(reqConfig?.headers)) {
-    headers = {...headers, ...reqConfig.headers};
+    headers = { ...headers, ...reqConfig.headers };
   }
   if (Objects.isNotEmpty(headers)) {
     await formatObjOption({
@@ -114,17 +109,17 @@ export async function loadUrl(
   }
   reqConfig.headers = {
     Referer: new URL(url).origin,
-    ...headers
-  }
-  return await httpClient('get', url, reqConfig);
+    ...headers,
+  };
+  return await httpClient("get", url, reqConfig);
 }
 
 export async function urlToBase64(
   args: CmdCtx & {
-    url: string,
-    reqConfig?: HTTP.RequestConfig
-  }
+    url: string;
+    reqConfig?: HTTP.RequestConfig;
+  },
 ) {
   const res = await loadUrl(args);
-  return `data:${res.headers.get('Content-Type')};base64,` + Buffer.from(res.data).toString('base64');
+  return `data:${res.headers.get("Content-Type")};base64,` + Buffer.from(res.data).toString("base64");
 }

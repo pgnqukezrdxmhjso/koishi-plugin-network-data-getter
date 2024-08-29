@@ -15,7 +15,5 @@
     "jsxImportSource": "@satorijs/element",
     "resolveJsonModule": true
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

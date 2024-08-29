@@ -11,6 +11,6 @@ const Strings = {
   isNotBlank(str: string): boolean {
     return !Strings.isBlank(str);
   },
-}
+};
 
 export default Strings;

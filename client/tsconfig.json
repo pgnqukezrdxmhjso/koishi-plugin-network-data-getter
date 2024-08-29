@@ -2,14 +2,9 @@
   "compilerOptions": {
     "module": "esnext",
     "moduleResolution": "node",
-    "types": [
-      "@koishijs/client/global"
-    ],
+    "types": ["@koishijs/client/global"],
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": [
-    ".",
-    "../src/**/*"
-  ]
+  "include": [".", "../src/**/*"]
 }

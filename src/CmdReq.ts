@@ -1,32 +1,31 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import {HTTP} from "koishi";
+import { HTTP } from "koishi";
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
-import {CmdCtx, formatObjOption, formatOption} from "./Core";
-import {getCmdHttpClient, loadUrl} from "./Http";
-import {debugInfo} from "./logger";
+import { CmdCtx, formatObjOption, formatOption } from "./Core";
+import { getCmdHttpClient, loadUrl } from "./Http";
+import { debugInfo } from "./logger";
 
-async function handleReqExpert(args: CmdCtx & {
-  requestConfig: HTTP.RequestConfig,
-}) {
-  const {
-    ctx, source, optionInfoMap,
-    requestConfig
-  } = args;
+async function handleReqExpert(
+  args: CmdCtx & {
+    requestConfig: HTTP.RequestConfig;
+  },
+) {
+  const { ctx, source, optionInfoMap, requestConfig } = args;
 
-  let expert = source.expert;
+  const expert = source.expert;
   if (!source.expertMode || !expert) {
     return;
   }
 
-  requestConfig.headers = {...(expert.requestHeaders || {})};
+  requestConfig.headers = { ...(expert.requestHeaders || {}) };
   await formatObjOption({
     ...args,
     obj: requestConfig.headers,
-    compelString: true
+    compelString: true,
   });
 
   switch (expert.requestDataType) {
@@ -39,10 +38,10 @@ async function handleReqExpert(args: CmdCtx & {
         await formatObjOption({
           ...args,
           obj: requestConfig.data,
-          compelString: false
+          compelString: false,
         });
       } else {
-        requestConfig.data = await formatOption({...args, content: expert.requestRaw});
+        requestConfig.data = await formatOption({ ...args, content: expert.requestRaw });
       }
       break;
     }
@@ -50,11 +49,13 @@ async function handleReqExpert(args: CmdCtx & {
       if (Objects.isEmpty(expert.requestForm)) {
         break;
       }
-      requestConfig.data = new URLSearchParams(await formatObjOption({
-        ...args,
-        obj: {...expert.requestForm},
-        compelString: true
-      }));
+      requestConfig.data = new URLSearchParams(
+        await formatObjOption({
+          ...args,
+          obj: { ...expert.requestForm },
+          compelString: true,
+        }),
+      );
       break;
     }
     case "form-data": {
@@ -65,22 +66,22 @@ async function handleReqExpert(args: CmdCtx & {
       requestConfig.data = form;
       const data = await formatObjOption({
         ...args,
-        obj: {...(expert.requestForm || {})},
-        compelString: true
+        obj: { ...(expert.requestForm || {}) },
+        compelString: true,
       });
-      for (let key in data) {
+      for (const key in data) {
         form.append(key, data[key]);
       }
 
       const fileOverwriteKeys = [];
-      for (let key in optionInfoMap.infoMap) {
+      for (const key in optionInfoMap.infoMap) {
         const optionInfo = optionInfoMap.infoMap[key];
         const oKey = optionInfo.overwriteKey || key;
         if (
-          !optionInfo.autoOverwrite
-          || !optionInfo.isFileUrl
-          || Strings.isBlank(optionInfo.value + '')
-          || typeof expert.requestFormFiles[oKey] === 'undefined'
+          !optionInfo.autoOverwrite ||
+          !optionInfo.isFileUrl ||
+          Strings.isBlank(optionInfo.value + "") ||
+          typeof expert.requestFormFiles[oKey] === "undefined"
         ) {
           continue;
         }
@@ -90,14 +91,14 @@ async function handleReqExpert(args: CmdCtx & {
           url: optionInfo.value as string,
           reqConfig: {
             responseType: "blob",
-          }
+          },
         });
 
-        form.append(oKey, fileRes.data, optionInfo.fileName || await Files.getFileNameByBlob(fileRes.data));
+        form.append(oKey, fileRes.data, optionInfo.fileName || (await Files.getFileNameByBlob(fileRes.data)));
         fileOverwriteKeys.push(oKey);
       }
 
-      for (let key in expert.requestFormFiles) {
+      for (const key in expert.requestFormFiles) {
         if (fileOverwriteKeys.includes(key)) {
           continue;
         }
@@ -116,8 +117,8 @@ function reqDataToJson(data: any) {
     return data;
   }
   if (data instanceof FormData) {
-    const newData = {}
-    for (let datum of data) {
+    const newData = {};
+    for (const datum of data) {
       const [key, value] = datum;
       if (value instanceof Blob) {
         newData[key] = value.name;
@@ -135,29 +136,37 @@ function reqDataToJson(data: any) {
 
 function reqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
   debugInfo(cmdCtx, () => {
-      const rc = {...requestConfig};
-      rc.data = reqDataToJson(rc.data);
-      return `cmdNetReq; ${cmdCtx.session.content}\n`
-        + `url: ${url}\n`
-        + `method: ${cmdCtx.source.requestMethod}\n`
-        + `config: ${JSON.stringify(rc, null, 2)}`;
-    }
-  )
+    const rc = { ...requestConfig };
+    rc.data = reqDataToJson(rc.data);
+    return (
+      `cmdNetReq; ${cmdCtx.session.content}\n` +
+      `url: ${url}\n` +
+      `method: ${cmdCtx.source.requestMethod}\n` +
+      `config: ${JSON.stringify(rc, null, 2)}`
+    );
+  });
 }
 
 export async function cmdReq(cmdCtx: CmdCtx) {
   const requestConfig: HTTP.RequestConfig = {};
-  await handleReqExpert({...cmdCtx, requestConfig});
-  const httpClient = getCmdHttpClient({ctx: cmdCtx.ctx, config: cmdCtx.config, source: cmdCtx.source});
-  const url = await formatOption({...cmdCtx, content: cmdCtx.source.sourceUrl});
+  await handleReqExpert({ ...cmdCtx, requestConfig });
+  const httpClient = getCmdHttpClient({ ctx: cmdCtx.ctx, config: cmdCtx.config, source: cmdCtx.source });
+  const url = await formatOption({ ...cmdCtx, content: cmdCtx.source.sourceUrl });
   reqLog(cmdCtx, url, requestConfig);
-  const res = await httpClient(
-    cmdCtx.source.requestMethod,
-    url,
-    requestConfig
-  );
+
+  let res: HTTP.Response;
+  try {
+    res = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
+  } catch (e) {
+    if (httpClient.isError(e)) {
+      throw new Error(`${e.response.statusText} ${JSON.stringify(e.response.data)}`);
+    }
+    throw e;
+  }
+
   debugInfo(cmdCtx, () => `cmdNetRes; ${cmdCtx.session.content}\n${JSON.stringify(res, null, 1)}`);
+  if (res.status > 300 || res.status < 200) {
+    throw new Error(`${res.statusText} ${JSON.stringify(res.data)}`);
+  }
   return res;
 }
-
-

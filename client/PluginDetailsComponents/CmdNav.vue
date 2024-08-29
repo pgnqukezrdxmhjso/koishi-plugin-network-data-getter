@@ -1,9 +1,7 @@
 <template>
-  <div :class="$style.container"
-       :style="containerPosition"
-  >
+  <div :class="$style.container" :style="containerPosition">
     <div :class="$style.head">
-      <IconMove :class="$style.move" @mousedown="startMove" @touchstart="startMove"/>
+      <IconMove :class="$style.move" @mousedown="startMove" @touchstart="startMove" />
     </div>
     <div :class="$style.scroll">
       <div :class="$style['cmd-list']">
@@ -16,15 +14,15 @@
 </template>
 
 <script setup lang="ts">
-import {inject, reactive, onUnmounted, computed, ComputedRef} from "vue";
+import { inject, reactive, onUnmounted, computed, ComputedRef } from "vue";
 import IconMove from "../assets/icon/IconMove.vue";
-import {Config} from "../../src";
+import { Config } from "../../src";
 
 const containerPosition = computed(() => {
   return {
-    top: mouseInfo.top + 'px',
-    right: mouseInfo.right + 'px',
-  }
+    top: mouseInfo.top + "px",
+    right: mouseInfo.right + "px",
+  };
 });
 const mouseInfo = reactive({
   ing: false,
@@ -50,7 +48,7 @@ const onMousemove = (event: MouseEvent | TouchEvent) => {
   if (mouseInfo.right < 15) {
     mouseInfo.right = 15;
   }
-}
+};
 const startMove = (event: MouseEvent | TouchEvent) => {
   if (event instanceof TouchEvent) {
     event = event.touches[0] as any as MouseEvent;
@@ -60,48 +58,45 @@ const startMove = (event: MouseEvent | TouchEvent) => {
   mouseInfo.startX = event.clientX;
   mouseInfo.startY = event.clientY;
   mouseInfo.ing = true;
-}
+};
 const endMove = () => {
   mouseInfo.ing = false;
-}
+};
 
-window.addEventListener('mousemove', onMousemove);
-window.addEventListener('mouseup', endMove);
-window.addEventListener('touchmove', onMousemove);
-window.addEventListener('touchend', endMove);
+window.addEventListener("mousemove", onMousemove);
+window.addEventListener("mouseup", endMove);
+window.addEventListener("touchmove", onMousemove);
+window.addEventListener("touchend", endMove);
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', onMousemove);
-  window.removeEventListener('mouseup', endMove);
-  window.removeEventListener('touchmove', onMousemove);
-  window.removeEventListener('touchend', endMove);
-})
+  window.removeEventListener("mousemove", onMousemove);
+  window.removeEventListener("mouseup", endMove);
+  window.removeEventListener("touchmove", onMousemove);
+  window.removeEventListener("touchend", endMove);
+});
 
-const current = inject<ComputedRef<{ config: Config }>>('manager.settings.current');
+const current = inject<ComputedRef<{ config: Config }>>("manager.settings.current");
 const sources = computed(() => {
   return current.value?.config?.sources || [];
 });
 
 const toCmd = (cmd: string) => {
-  const docs = document.querySelectorAll('.k-schema-left');
+  const docs = document.querySelectorAll(".k-schema-left");
   for (let i in docs) {
     const item = docs[i];
     if (
-      item.innerHTML.includes('sources[')
-      && item.innerHTML.includes('command')
-      && item.nextElementSibling?.querySelector('input')?.value === cmd
+      item.innerHTML.includes("sources[") &&
+      item.innerHTML.includes("command") &&
+      item.nextElementSibling?.querySelector("input")?.value === cmd
     ) {
       item.scrollIntoView({
-        behavior: 'smooth',
+        behavior: "smooth",
       });
       return;
     }
   }
-}
-
-
+};
 </script>
-
 
 <style module lang="scss">
 @import "../assets/common";
@@ -113,14 +108,14 @@ const toCmd = (cmd: string) => {
   z-index: 999;
   width: 70px;
   max-height: 60vh;
-  background: rgba(0, 0, 0, .3);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   user-select: none;
 
   > .head {
     display: flex;
-    background: rgba(255, 255, 255, .75);
+    background: rgba(255, 255, 255, 0.75);
     padding: 5px;
     align-items: center;
 
@@ -160,11 +155,10 @@ const toCmd = (cmd: string) => {
   }
 
   .cmd-list {
-
     > * {
       margin-top: 1px;
       padding: 3px 5px;
-      background: rgba(255, 255, 255, .55);
+      background: rgba(255, 255, 255, 0.55);
       cursor: pointer;
     }
   }

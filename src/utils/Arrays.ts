@@ -4,7 +4,7 @@ const Arrays = {
   },
   isNotEmpty(arr: any[]) {
     return !Arrays.isEmpty(arr);
-  }
-}
+  },
+};
 
-export default Arrays
+export default Arrays;

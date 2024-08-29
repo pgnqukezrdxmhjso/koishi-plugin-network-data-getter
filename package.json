@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "透過配置指令，請求url併傳送聊天訊息",
-  "version": "0.1.59",
+  "version": "0.1.60",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
@@ -33,18 +33,25 @@
     "api"
   ],
   "peerDependencies": {
-    "@koishijs/plugin-console": "^5.29.2",
-    "@koishijs/plugin-http": "^0.5.3",
-    "koishi": "^4.17.9"
+    "@koishijs/plugin-console": "^5.29.3",
+    "koishi": "^4.17.12"
   },
   "dependencies": {
     "ejs": "^3.1.10",
-    "file-type": "^19.0.0",
+    "file-type": "^19.4.1",
     "node-html-parser": "^6.1.13",
-    "otpauth": "^9.3.1"
+    "otpauth": "^9.3.2"
   },
   "devDependencies": {
-    "@koishijs/client": "^5.29.2",
-    "@types/ejs": "^3.1.5"
+    "@eslint/js": "^9.9.1",
+    "@koishijs/client": "^5.29.3",
+    "@types/ejs": "^3.1.5",
+    "@types/eslint": "^9",
+    "eslint": "^9.9.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.27.0",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.3",
+    "typescript-eslint": "^8.3.1-alpha.5"
   }
 }

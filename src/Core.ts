@@ -2,30 +2,29 @@ import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 
-import {Argv, Context, Element, Fragment, HTTP, Session} from "koishi";
+import { Argv, Context, Element, Fragment, HTTP, Session } from "koishi";
 import * as OTPAuth from "otpauth";
 
-import {CmdSource, CommandArg, CommandOption, Config, OptionValue} from "./Config";
-import {cmdResData} from "./CmdResData";
+import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
+import { cmdResData } from "./CmdResData";
 import Arrays from "./utils/Arrays";
-import {rendered} from "./Renderer";
-import {cmdReq} from "./CmdReq";
-import {logger} from "./logger";
-import {Channel, GuildMember} from "@satorijs/protocol";
+import { rendered } from "./Renderer";
+import { cmdReq } from "./CmdReq";
+import { logger } from "./logger";
+import { Channel, GuildMember } from "@satorijs/protocol";
 import Strings from "./utils/Strings";
 import KoishiUtil from "./utils/KoishiUtil";
 import Objects from "./utils/Objects";
-import {loadUrl, urlToBase64} from "./Http";
-
+import { loadUrl, urlToBase64 } from "./Http";
 
 export interface PresetPool {
   presetConstantPool: Record<string, OptionValue>;
   presetConstantPoolFnArg: string;
-  presetFnPool: Record<string, Function>;
+  presetFnPool: Record<string, () => void>;
   presetFnPoolFnArg: string;
 }
 
-type OptionInfoValue = OptionValue | GuildMember | Channel
+type OptionInfoValue = OptionValue | GuildMember | Channel;
 
 interface OptionInfo {
   value: OptionInfoValue;
@@ -52,10 +51,7 @@ export interface CmdCtx {
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
-async function getGuildMember({userId, session}: {
-  userId: string,
-  session: Session,
-}) {
+async function getGuildMember({ userId, session }: { userId: string; session: Session }) {
   let res: GuildMember;
   await KoishiUtil.forList(
     (member) => {
@@ -66,41 +62,40 @@ async function getGuildMember({userId, session}: {
       }
       res = {
         ...member,
-        user: {...member.user},
+        user: { ...member.user },
         nick,
         name,
-      }
-      res.toString = () => res.user.id + ':' + (res.nick || res.name)
+      };
+      res.toString = () => res.user.id + ":" + (res.nick || res.name);
       return false;
     },
-    session.bot, session.bot.getGuildMemberList,
-    session.guildId
+    session.bot,
+    session.bot.getGuildMemberList,
+    session.guildId,
   );
   if (!res) {
     res = {
-      name: userId
+      name: userId,
     };
     res.toString = () => ":" + userId;
   }
   return res;
 }
 
-async function getChannel({channelId, session}: {
-  channelId: string,
-  session: Session,
-}) {
+async function getChannel({ channelId, session }: { channelId: string; session: Session }) {
   let res: Channel;
   await KoishiUtil.forList(
-    (channel) => {
+    (channel: Channel) => {
       if (channelId !== channel.id && channelId !== channel.name) {
         return;
       }
-      res = {...channel};
-      res.toString = () => res.id + ':' + res.name;
+      res = { ...channel };
+      res.toString = () => res.id + ":" + res.name;
       return false;
     },
-    session.bot, session.bot.getChannelList,
-    session.guildId
+    session.bot,
+    session.bot.getChannelList,
+    session.guildId,
   );
   if (!res) {
     res = {
@@ -113,53 +108,60 @@ async function getChannel({channelId, session}: {
   return channelId;
 }
 
-async function handleOptionInfoData({optionInfo, option, argv}: {
-  optionInfo: OptionInfo,
-  option: CommandArg | CommandOption
-  argv: Argv
+async function handleOptionInfoData({
+  optionInfo,
+  option,
+  argv,
+}: {
+  optionInfo: OptionInfo;
+  option: CommandArg | CommandOption;
+  argv: Argv;
 }) {
-  if (typeof optionInfo.value !== 'string') {
+  if (typeof optionInfo.value !== "string") {
     return;
   }
   const value = optionInfo.value.trim();
-  if (option.type === 'user') {
-    const u = value.split(':')[1];
+  if (option.type === "user") {
+    const u = value.split(":")[1];
     if (Strings.isBlank(u)) {
       return;
     }
-    optionInfo.value = await getGuildMember({userId: u, session: argv.session});
-  } else if (option.type === 'channel') {
-    const c = value.split(':')[1];
+    optionInfo.value = await getGuildMember({
+      userId: u,
+      session: argv.session,
+    });
+  } else if (option.type === "channel") {
+    const c = value.split(":")[1];
     if (Strings.isBlank(c)) {
       return;
     }
-    optionInfo.value = await getChannel({channelId: c, session: argv.session});
-  } else if (
-    (/^<(img|audio|video|file)/).test(value.trim())
-    && !(/&lt;(img|audio|video|file)/).test(argv.source)
-  ) {
+    optionInfo.value = await getChannel({
+      channelId: c,
+      session: argv.session,
+    });
+  } else if (/^<(img|audio|video|file)/.test(value.trim()) && !/&lt;(img|audio|video|file)/.test(argv.source)) {
     const element = Element.parse(value.trim())[0];
-    const imgSrc = element.attrs['src'];
+    const imgSrc = element.attrs["src"];
     if (Strings.isBlank(imgSrc)) {
       return;
     }
     optionInfo.value = imgSrc;
     optionInfo.isFileUrl = true;
-    for (let attrsKey in element.attrs) {
-      if (attrsKey.toLowerCase().includes('file')) {
-        optionInfo.fileName = (element.attrs[attrsKey] + '').trim();
+    for (const attrsKey in element.attrs) {
+      if (attrsKey.toLowerCase().includes("file")) {
+        optionInfo.fileName = (element.attrs[attrsKey] + "").trim();
         break;
       }
     }
   }
 }
 
-async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv }): Promise<OptionInfoMap> {
+async function handleOptionInfos({ source, argv }: { source: CmdSource; argv: Argv }): Promise<OptionInfoMap> {
   const optionInfoMap: OptionInfoMap = {
     map: {},
     infoMap: {},
-    fnArg: '{}={}',
-  }
+    fnArg: "{}={}",
+  };
   if (!source.expertMode || !source.expert) {
     return optionInfoMap;
   }
@@ -185,7 +187,7 @@ async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv
       value: argv.args?.[i],
       autoOverwrite: arg.autoOverwrite,
       overwriteKey: arg.overwriteKey,
-    }
+    };
     await handleOptionInfoData({
       optionInfo,
       option: arg,
@@ -193,33 +195,38 @@ async function handleOptionInfos({source, argv}: { source: CmdSource, argv: Argv
     });
     optionInfoMap.map[arg.name] = optionInfo.value;
     optionInfoMap.infoMap[arg.name] = optionInfo;
-    optionInfoMap.map['$' + i] = optionInfo.value;
-    optionInfoMap.infoMap['$' + i] = optionInfo;
+    optionInfoMap.map["$" + i] = optionInfo.value;
+    optionInfoMap.infoMap["$" + i] = optionInfo;
   }
-  optionInfoMap.fnArg = '{' + Object.keys(optionInfoMap.infoMap).join(',') + '}={}';
+  optionInfoMap.fnArg = "{" + Object.keys(optionInfoMap.infoMap).join(",") + "}={}";
 
   return optionInfoMap;
 }
 
-
-const internalFns: { [key in string]: Function } = {
-  async urlToString(cmdCtx: CmdCtx, args: {
-    url: string,
-    reqConfig?: HTTP.RequestConfig
-  }) {
-    const res = await loadUrl({...cmdCtx, ...args});
+const internalFns: { [key in string]: (...args: any[]) => any } = {
+  async urlToString(
+    cmdCtx: CmdCtx,
+    args: {
+      url: string;
+      reqConfig?: HTTP.RequestConfig;
+    },
+  ) {
+    const res = await loadUrl({ ...cmdCtx, ...args });
     if (typeof res.data === "string") {
       return res.data;
     }
-    return Buffer.from(res.data).toString('latin1');
+    return Buffer.from(res.data).toString("latin1");
   },
-  async urlToBase64(cmdCtx: CmdCtx, args: {
-    url: string,
-    reqConfig?: HTTP.RequestConfig
-  }) {
-    return urlToBase64({...cmdCtx, ...args});
-  }
-}
+  async urlToBase64(
+    cmdCtx: CmdCtx,
+    args: {
+      url: string;
+      reqConfig?: HTTP.RequestConfig;
+    },
+  ) {
+    return urlToBase64({ ...cmdCtx, ...args });
+  },
+};
 
 function purifyCmdCtx(cmdCtx: CmdCtx) {
   return {
@@ -229,189 +236,189 @@ function purifyCmdCtx(cmdCtx: CmdCtx) {
     presetPool: cmdCtx.presetPool,
     session: cmdCtx.session,
     optionInfoMap: cmdCtx.optionInfoMap,
-  }
+  };
 }
 
 export function buildInternalFns(cmdCtx: CmdCtx) {
   cmdCtx = purifyCmdCtx(cmdCtx);
-  const fns = {}
-  for (let name in internalFns) {
-    fns['$' + name] = internalFns[name].bind(null, cmdCtx);
+  const fns = {};
+  for (const name in internalFns) {
+    fns["$" + name] = internalFns[name].bind(null, cmdCtx);
   }
   return {
     fns,
-    arg: `{${Object.keys(fns).join(',')}}`
+    arg: `{${Object.keys(fns).join(",")}}`,
   };
 }
 
-export async function formatOption(args: CmdCtx & {
-  content: string,
-  data?: any
-}): Promise<string> {
-  let {
-    content, data,
-    presetPool, session, optionInfoMap
-  } = args;
+export async function formatOption(
+  args: CmdCtx & {
+    content: string;
+    data?: any;
+  },
+): Promise<string> {
+  const { data, presetPool, session, optionInfoMap } = args;
+  let { content } = args;
   const contentList = [];
-  content = content
-    .replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-      contentList.push(p1);
-      return match;
-    });
+  content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
+    contentList.push(p1);
+    return match;
+  });
   if (contentList.length < 1) {
     return content;
   }
 
   const iFns = buildInternalFns(args);
-  const fnArgTexts = ['$e', iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
+  const fnArgTexts = ["$e", iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
   const fnArgs: any[] = [session.event, iFns.fns, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
   if (optionInfoMap) {
     fnArgTexts.push(optionInfoMap.fnArg);
     fnArgs.push(optionInfoMap.map ?? {});
   }
   if (Objects.isNotNull(data)) {
-    fnArgTexts.push('$data');
+    fnArgTexts.push("$data");
     fnArgs.push(data);
   }
 
   const resMap = {};
   for (let i = 0; i < contentList.length; i++) {
     const item = contentList[i];
-    resMap[i + '_' + item] = await AsyncFunction(...fnArgTexts, 'return ' + item.replace(/\n/g, '\\n'))(...fnArgs);
+    resMap[i + "_" + item] = await AsyncFunction(...fnArgTexts, "return " + item.replace(/\n/g, "\\n"))(...fnArgs);
   }
 
   let i = 0;
   content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
-    return resMap[i++ + '_' + p1] ?? '';
+    return resMap[i++ + "_" + p1] ?? "";
   });
 
   return content;
 }
 
-export async function formatObjOption(args: CmdCtx & {
-  obj: {},
-  compelString: boolean,
-}) {
-  const {obj, compelString, optionInfoMap} = args;
+export async function formatObjOption(
+  args: CmdCtx & {
+    obj: any;
+    compelString: boolean;
+  },
+) {
+  const { obj, compelString, optionInfoMap } = args;
   await Objects.thoroughForEach(obj, async (value, key, obj) => {
-    if (typeof value === 'string') {
-      obj[key] = await formatOption({...args, content: obj[key]});
+    if (typeof value === "string") {
+      obj[key] = await formatOption({
+        ...args,
+        content: obj[key],
+      });
     }
   });
 
-  if (optionInfoMap) for (let name in optionInfoMap.infoMap) {
-    const optionInfo = optionInfoMap.infoMap[name];
-    const oKey = optionInfo.overwriteKey || name;
-    if (
-      !optionInfo.autoOverwrite
-      || typeof optionInfo.value === 'undefined'
-      || typeof eval(`obj?.${oKey.replace(/(?<!\?)\./g, '?.').replace(/(?<!\?.)\[/g, '?.[')}`) === 'undefined'
-    ) {
-      continue;
+  if (optionInfoMap)
+    for (const name in optionInfoMap.infoMap) {
+      const optionInfo = optionInfoMap.infoMap[name];
+      const oKey = optionInfo.overwriteKey || name;
+      if (
+        !optionInfo.autoOverwrite ||
+        typeof optionInfo.value === "undefined" ||
+        typeof eval(`obj?.${oKey.replace(/(?<!\?)\./g, "?.").replace(/(?<!\?.)\[/g, "?.[")}`) === "undefined"
+      ) {
+        continue;
+      }
+      try {
+        eval(`obj.${oKey} = optionInfo.value` + (compelString ? '+""' : ""));
+      } catch (_e) {}
     }
-    try {
-      eval(`obj.${oKey} = optionInfo.value` + (compelString ? '+""' : ''));
-    } catch (e) {
-    }
-  }
 
   return obj;
 }
 
 export default function () {
-
   let presetPool: PresetPool = {
     presetConstantPool: {},
-    presetConstantPoolFnArg: '{}={}',
+    presetConstantPoolFnArg: "{}={}",
     presetFnPool: {},
-    presetFnPoolFnArg: '{}={}',
-  }
+    presetFnPoolFnArg: "{}={}",
+  };
 
-  function initPresetConstants({ctx, config}: {
-    ctx: Context,
-    config: Config
-  }) {
+  function initPresetConstants({ ctx, config }: { ctx: Context; config: Config }) {
     if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetConstants)) {
       return;
     }
-    config.expert.presetConstants.forEach(presetConstant => {
+    config.expert.presetConstants.forEach((presetConstant) => {
       if (!presetConstant) {
         return;
       }
-      if (presetConstant.type !== 'file') {
+      if (presetConstant.type !== "file") {
         presetPool.presetConstantPool[presetConstant.name] = presetConstant.value;
         return;
       }
-      const filePath = path.join(ctx.baseDir, presetConstant.value + '');
+      const filePath = path.join(ctx.baseDir, presetConstant.value + "");
       Object.defineProperty(presetPool.presetConstantPool, presetConstant.name, {
         configurable: true,
         enumerable: true,
         get: () => fs.readFileSync(filePath),
-      })
+      });
     });
-    presetPool.presetConstantPoolFnArg = '{' + Object.keys(presetPool.presetConstantPool).join(',') + '}={}';
+    presetPool.presetConstantPoolFnArg = "{" + Object.keys(presetPool.presetConstantPool).join(",") + "}={}";
   }
 
-  function initPresetFns({ctx, config}: { ctx: Context, config: Config }) {
+  function initPresetFns({ ctx, config }: { ctx: Context; config: Config }) {
     if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
       return;
     }
-    config.expert.presetFns.forEach(presetFn => {
+    config.expert.presetFns.forEach((presetFn) => {
       if (!presetFn) {
-        return
+        return;
       }
       const moduleMap = {
         crypto,
         OTPAuth,
-        http: ctx.http
+        http: ctx.http,
       };
 
       const fn = (presetFn.async ? AsyncFunction : Function)(
-        `{${Object.keys(moduleMap).join(',')}}`, presetPool.presetConstantPoolFnArg, presetFn.args, presetFn.body
+        `{${Object.keys(moduleMap).join(",")}}`,
+        presetPool.presetConstantPoolFnArg,
+        presetFn.args,
+        presetFn.body,
       );
       presetPool.presetFnPool[presetFn.name] = fn.bind(fn, moduleMap, presetPool.presetConstantPool ?? {});
     });
-    presetPool.presetFnPoolFnArg = '{' + Object.keys(presetPool.presetFnPool).join(',') + '}={}';
+    presetPool.presetFnPoolFnArg = "{" + Object.keys(presetPool.presetFnPool).join(",") + "}={}";
   }
 
-
-  function initConfig({ctx, config}: {
-    ctx: Context,
-    config: Config
-  }) {
-    initPresetConstants({ctx, config});
-    initPresetFns({ctx, config});
+  function initConfig({ ctx, config }: { ctx: Context; config: Config }) {
+    initPresetConstants({ ctx, config });
+    initPresetFns({ ctx, config });
   }
 
   function onDispose() {
     presetPool = null;
   }
 
-  async function send({ctx, config, source, argv}: {
-    ctx: Context,
-    config: Config,
-    source: CmdSource,
-    argv: Argv,
-  }) {
-    logger.debug('args: ', argv.args);
-    logger.debug('options: ', argv.options);
+  async function send({ ctx, config, source, argv }: { ctx: Context; config: Config; source: CmdSource; argv: Argv }) {
+    logger.debug("args: ", argv.args);
+    logger.debug("options: ", argv.options);
 
     const session = argv.session;
     if (config.gettingTips != source.reverseGettingTips) {
       await session.send(`獲取 ${source.command} 中，請稍候...`);
     }
 
-    const optionInfoMap = await handleOptionInfos({source, argv});
-    const cmdCtx: CmdCtx = {ctx, config, source, presetPool, session, optionInfoMap};
+    const optionInfoMap = await handleOptionInfos({ source, argv });
+    const cmdCtx: CmdCtx = {
+      ctx,
+      config,
+      source,
+      presetPool,
+      session,
+      optionInfoMap,
+    };
 
     const res: HTTP.Response = await cmdReq(cmdCtx);
-    if (res.status > 300 || res.status < 200) {
-      const msg = JSON.stringify(res.data);
-      throw new Error(`${msg} (${res.statusText})`);
-    }
 
     const resData = cmdResData(source, res);
-    const fragment: Fragment = await rendered({...cmdCtx, resData});
+    const fragment: Fragment = await rendered({
+      ...cmdCtx,
+      resData,
+    });
 
     if (fragment) {
       const [msg] = await session.send(fragment);
@@ -421,5 +428,5 @@ export default function () {
     }
   }
 
-  return {send, initConfig, onDispose};
+  return { send, initConfig, onDispose };
 }
