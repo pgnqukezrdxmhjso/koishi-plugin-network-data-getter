@@ -3,14 +3,16 @@ import path from "node:path";
 import { Argv, Command, Context, HTTP } from "koishi";
 // noinspection ES6UnusedImports
 import {} from "@koishijs/plugin-console";
+// noinspection ES6UnusedImports
+import {} from "koishi-plugin-umami-statistics-service";
 
 import Strings from "./utils/Strings";
 import { Config } from "./Config";
 import { logger } from "./logger";
-import Umami from "./Umami";
 import Core from "./Core";
+import Umami from "./Umami";
 
-export const inject = ["http"];
+export const inject = ["http", "umamiStatisticsService"];
 export { Config } from "./Config";
 export const name = "network-data-getter";
 // noinspection JSUnusedGlobalSymbols
@@ -28,7 +30,7 @@ export function apply(ctx: Context, config: Config) {
     urlSearchParams: {
       uid: ctx.scope.uid,
     },
-  });
+  }).then();
 
   if (applyCount === 1) {
     ctx.inject(["console"], (ctx) => {
@@ -100,6 +102,7 @@ export function apply(ctx: Context, config: Config) {
     true,
   );
 
+  let lastUmami = 0;
   config.sources.forEach((source) => {
     let def = source.command;
     if (source.expertMode)
@@ -117,7 +120,19 @@ export function apply(ctx: Context, config: Config) {
     const command = ctx
       .command(def, source.desc ?? "", cmdConfig)
       .alias(...source.alias)
-      .action((argv) => send({ ctx, config, source, argv }));
+      .action((argv) => {
+        if (Date.now() - lastUmami > 24 * 60 * 60 * 1000) {
+          lastUmami = Date.now();
+          Umami.send({
+            ctx,
+            url: "cmd_action",
+            urlSearchParams: {
+              uid: ctx.scope.uid,
+            },
+          }).then();
+        }
+        return send({ ctx, config, source, argv });
+      });
 
     if (source.expertMode)
       source.expert?.commandOptions?.forEach((option) => {

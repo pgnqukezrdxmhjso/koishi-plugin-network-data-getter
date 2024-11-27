@@ -202,7 +202,10 @@ jsonKey: "[].possible_answers[].action.type"
 ```json
 {
   "abc": {
-    "xyz": ["foo", "bar"]
+    "xyz": [
+      "foo",
+      "bar"
+    ]
   }
 }
 ```
@@ -258,6 +261,10 @@ ejsTemplate: |-
 - 支援處理動態網頁
 - 自動回填預設的配置
 - 線上分享配置頁面
+
+### 0.1.65
+
+- umami-statistics-service
 
 ### 0.1.61
 
