@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Argv, Command, Context, HTTP } from "koishi";
+import { Argv, Command, Context } from "koishi";
 // noinspection ES6UnusedImports
 import {} from "@koishijs/plugin-console";
 // noinspection ES6UnusedImports
@@ -160,11 +160,7 @@ const cmdConfig: Command.Config = {
   checkUnknown: true,
   checkArgCount: true,
   handleError: (err, { command }) => {
-    if (HTTP.Error.is(err)) {
-      logger.error(err.code, err.stack);
-    } else {
-      logger.error(err);
-    }
+    logger.error(err);
     return `執行指令 ${command.displayName} 失敗`;
   },
 };

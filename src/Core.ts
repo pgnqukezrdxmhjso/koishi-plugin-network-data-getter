@@ -251,13 +251,39 @@ export function buildInternalFns(cmdCtx: CmdCtx) {
   };
 }
 
+export function generateCodeRunner(
+  args: CmdCtx & {
+    expandData?: { [k in string]: any };
+  },
+) {
+  const { expandData, presetPool, session, optionInfoMap } = args;
+  const iFns = buildInternalFns(args);
+  const fnArgTexts = ["$e", iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
+  const fnArgs: any[] = [session.event, iFns.fns, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
+  if (optionInfoMap) {
+    fnArgTexts.push(optionInfoMap.fnArg);
+    fnArgs.push(optionInfoMap.map ?? {});
+  }
+
+  if (expandData) {
+    for (const key in expandData) {
+      fnArgTexts.push("$" + key);
+      fnArgs.push(expandData[key]);
+    }
+  }
+
+  return async (code: string) => {
+    const fn = AsyncFunction(...fnArgTexts, code);
+    return fn.apply(fn, fnArgs);
+  };
+}
+
 export async function formatOption(
   args: CmdCtx & {
     content: string;
     data?: any;
   },
 ): Promise<string> {
-  const { data, presetPool, session, optionInfoMap } = args;
   let { content } = args;
   const contentList = [];
   content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
@@ -268,22 +294,15 @@ export async function formatOption(
     return content;
   }
 
-  const iFns = buildInternalFns(args);
-  const fnArgTexts = ["$e", iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
-  const fnArgs: any[] = [session.event, iFns.fns, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
-  if (optionInfoMap) {
-    fnArgTexts.push(optionInfoMap.fnArg);
-    fnArgs.push(optionInfoMap.map ?? {});
-  }
-  if (Objects.isNotNull(data)) {
-    fnArgTexts.push("$data");
-    fnArgs.push(data);
-  }
+  const codeRunner = generateCodeRunner({
+    ...args,
+    expandData: { data: args.data },
+  });
 
   const resMap = {};
   for (let i = 0; i < contentList.length; i++) {
     const item = contentList[i];
-    resMap[i + "_" + item] = await AsyncFunction(...fnArgTexts, "return " + item.replace(/\n/g, "\\n"))(...fnArgs);
+    resMap[i + "_" + item] = await codeRunner("return " + item.replace(/\n/g, "\\n"));
   }
 
   let i = 0;
@@ -393,6 +412,47 @@ export default function () {
     presetPool = null;
   }
 
+  async function sendHttpError(cmdCtx: CmdCtx, e: Error) {
+    if (!HTTP.Error.is(e)) {
+      throw e;
+    }
+    const { source, config } = cmdCtx;
+    const httpErrorShowToMsg =
+      source.httpErrorShowToMsg !== "inherit" ? source.httpErrorShowToMsg : config.httpErrorShowToMsg;
+    let fragment = `執行指令 ${source.command} 失敗: `;
+    switch (httpErrorShowToMsg) {
+      case "hide": {
+        throw e;
+      }
+      case "show": {
+        const res = e.response;
+        if (!res) {
+          fragment += e.message;
+        } else {
+          fragment += res.statusText || "";
+          if (res.data) {
+            fragment += " " + (typeof res.data === "object" ? JSON.stringify(res.data) : res.data);
+          }
+        }
+        break;
+      }
+      case "function": {
+        if (!source.httpErrorShowToMsgFn) {
+          throw e;
+        }
+        fragment += await generateCodeRunner({
+          ...cmdCtx,
+          expandData: {
+            response: e.response,
+            error: e,
+          },
+        })(source.httpErrorShowToMsgFn);
+        break;
+      }
+    }
+    return fragment;
+  }
+
   async function send({ ctx, config, source, argv }: { ctx: Context; config: Config; source: CmdSource; argv: Argv }) {
     logger.debug("args: ", argv.args);
     logger.debug("options: ", argv.options);
@@ -402,24 +462,26 @@ export default function () {
       await session.send(`獲取 ${source.command} 中，請稍候...`);
     }
 
-    const optionInfoMap = await handleOptionInfos({ source, argv });
     const cmdCtx: CmdCtx = {
       ctx,
       config,
       source,
       presetPool,
       session,
-      optionInfoMap,
+      optionInfoMap: null,
     };
-
-    const res: HTTP.Response = await cmdReq(cmdCtx);
-
-    const resData = cmdResData(source, res);
-    const fragment: Fragment = await rendered({
-      ...cmdCtx,
-      resData,
-    });
-
+    let fragment: Fragment;
+    try {
+      cmdCtx.optionInfoMap = await handleOptionInfos({ source, argv });
+      const res: HTTP.Response = await cmdReq(cmdCtx);
+      const resData = cmdResData(source, res);
+      fragment = await rendered({
+        ...cmdCtx,
+        resData,
+      });
+    } catch (e) {
+      fragment = await sendHttpError(cmdCtx, e);
+    }
     if (fragment) {
       const [msg] = await session.send(fragment);
       if (source.recall > 0) {

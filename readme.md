@@ -262,6 +262,10 @@ ejsTemplate: |-
 - 自動回填預設的配置
 - 線上分享配置頁面
 
+### 0.1.66
+
+- 增加http報錯處理方式配置
+
 ### 0.1.65
 
 - umami-statistics-service

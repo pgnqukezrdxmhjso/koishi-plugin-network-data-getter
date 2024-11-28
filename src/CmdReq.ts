@@ -154,19 +154,8 @@ export async function cmdReq(cmdCtx: CmdCtx) {
   const url = await formatOption({ ...cmdCtx, content: cmdCtx.source.sourceUrl });
   reqLog(cmdCtx, url, requestConfig);
 
-  let res: HTTP.Response;
-  try {
-    res = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
-  } catch (e) {
-    if (httpClient.isError(e)) {
-      throw new Error(`${e.response?.statusText} ${JSON.stringify(e.response?.data)}`);
-    }
-    throw e;
-  }
+  const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
 
   debugInfo(cmdCtx, () => `cmdNetRes; ${cmdCtx.session.content}\n${JSON.stringify(res, null, 1)}`);
-  if (res.status > 300 || res.status < 200) {
-    throw new Error(`${res.statusText} ${JSON.stringify(res.data)}`);
-  }
   return res;
 }

@@ -11,6 +11,8 @@ export type ProxyType = "NONE" | "GLOBAL" | "MANUAL";
 export type OptionValue = boolean | string | number;
 export type CommandType = "string" | "number" | "user" | "channel" | "text";
 export type MessagePackingType = "none" | "multiple" | "all";
+export type HttpErrorShowToMsg = "hide" | "show";
+export type SourceHttpErrorShowToMsg = "inherit" | HttpErrorShowToMsg | "function";
 
 export interface CommandArg {
   name: string;
@@ -65,6 +67,9 @@ export interface CmdSource {
   ejsTemplate?: string;
   cmdLink?: string;
 
+  httpErrorShowToMsg: SourceHttpErrorShowToMsg;
+  httpErrorShowToMsgFn?: string;
+
   expertMode: boolean;
   expert?: SourceExpert;
 }
@@ -104,6 +109,7 @@ export interface Config {
   anonymousStatistics: boolean;
   gettingTips: boolean;
   messagePackingType: MessagePackingType;
+  httpErrorShowToMsg: HttpErrorShowToMsg;
   expertMode: boolean;
   expert?: ConfigExpert;
   sources: CmdSource[];
@@ -153,6 +159,10 @@ function proxyConfigSchema() {
   ];
 }
 
+const CommonSchema = {
+  inherit: Schema.const("inherit").description("繼承"),
+};
+
 export const Config: Schema<Config> = Schema.intersect([
   Schema.intersect([
     Schema.object({
@@ -175,6 +185,12 @@ export const Config: Schema<Config> = Schema.intersect([
       ])
         .default("none")
         .description("訊息合併"),
+      httpErrorShowToMsg: Schema.union([
+        Schema.const("hide").description("隱藏"),
+        Schema.const("show").description("顯示"),
+      ])
+        .default("hide")
+        .description("http報錯是否顯示在回覆訊息中"),
       expertMode: Schema.boolean().default(false).description("專家模式"),
     }).description("基礎設定"),
     Schema.union([
@@ -265,7 +281,7 @@ export const Config: Schema<Config> = Schema.intersect([
           desc: Schema.string().description("指令描述"),
           reverseGettingTips: Schema.boolean().default(false).description("對獲取中提示狀態取反"),
           messagePackingType: Schema.union([
-            Schema.const("inherit").description("繼承"),
+            CommonSchema.inherit,
             Schema.const("none").description("不合並"),
             Schema.const("multiple").description("合併多條"),
             Schema.const("all").description("全部合併"),
@@ -336,6 +352,33 @@ export const Config: Schema<Config> = Schema.intersect([
               .role("textarea", { rows: [2, 9] })
               .required()
               .description("指令鏈"),
+          }),
+          Schema.object({} as any),
+        ]),
+
+        Schema.object({
+          httpErrorShowToMsg: Schema.union([
+            CommonSchema.inherit,
+            Schema.const("hide").description("隱藏"),
+            Schema.const("show").description("顯示"),
+            Schema.const("function").description("自定義函式"),
+          ])
+            .default("inherit")
+            .description("http報錯是否顯示在回覆訊息中"),
+        }),
+        Schema.union([
+          Schema.object({
+            httpErrorShowToMsg: Schema.const("function").required(),
+            httpErrorShowToMsgFn: Schema.string()
+              .role("textarea", { rows: [3, 9] })
+              .required()
+              .description("" +
+                "**return** 返回的值將會加入回覆訊息中  \n" +
+                "使用方法見專家模式中的 **_prompt**  \n" +
+                "配置項中不需要加 **<%= %>**  \n" +
+                "#可額外使用  \n" +
+                "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
+                "$error [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)"),
           }),
           Schema.object({} as any),
         ]),
@@ -445,7 +488,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     "#指令鏈 | EJS 模板 配置項中可額外使用  \n" +
                     "**<%=$data%>** 插入返回的資料  \n" +
                     "#內建函式  \n" +
-                    "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/b2da31b7cfef8b8490961037b2ba08c6efc6d03f/packages/core/src/index.ts#L99)  \n" +
+                    "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
                     "**await $urlToBase64({url,reqConfig})**  \n",
                 ),
                 requestHeaders: Schema.dict(String).role("table").default({}).description("請求頭"),
