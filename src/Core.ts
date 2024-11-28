@@ -471,6 +471,7 @@ export default function () {
       optionInfoMap: null,
     };
     let fragment: Fragment;
+    let isError = false;
     try {
       cmdCtx.optionInfoMap = await handleOptionInfos({ source, argv });
       const res: HTTP.Response = await cmdReq(cmdCtx);
@@ -480,13 +481,24 @@ export default function () {
         resData,
       });
     } catch (e) {
+      isError = true;
       fragment = await sendHttpError(cmdCtx, e);
     }
-    if (fragment) {
+
+    if (!fragment) {
+      return;
+    }
+
+    const isTopic = !isError && ctx.messageTopicService && source.msgSendMode === "topic" && source.msgTopic;
+    if (source.msgSendMode === "direct" || !isTopic) {
       const [msg] = await session.send(fragment);
       if (source.recall > 0) {
         ctx.setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000);
       }
+    } else {
+      await ctx.messageTopicService.sendMessageToTopic(source.msgTopic, fragment, {
+        retractTime: source.recall > 0 ? source.recall * 60 : undefined,
+      });
     }
   }
 

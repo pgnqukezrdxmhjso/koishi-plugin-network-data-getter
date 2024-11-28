@@ -5,6 +5,8 @@ import { Argv, Command, Context } from "koishi";
 import {} from "@koishijs/plugin-console";
 // noinspection ES6UnusedImports
 import {} from "koishi-plugin-umami-statistics-service";
+// noinspection ES6UnusedImports
+import {} from "koishi-plugin-message-topic-service";
 
 import Strings from "./utils/Strings";
 import { Config } from "./Config";
@@ -12,13 +14,20 @@ import { logger } from "./logger";
 import Core from "./Core";
 import Umami from "./Umami";
 
-export const inject = ["http", "umamiStatisticsService"];
+export const inject = {
+  required: ["http", "umamiStatisticsService"],
+  optional: ["messageTopicService"],
+};
+
 export { Config } from "./Config";
 export const name = "network-data-getter";
 // noinspection JSUnusedGlobalSymbols
 export const reusable = true;
 // noinspection JSUnusedGlobalSymbols
-export const usage = `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>`;
+export const usage =
+  `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>  \n` +
+  "umamiStatisticsService 服務為 umami-statistics-service 插件  \n" +
+  "messageTopicService 服務為 message-topic-service 插件";
 
 let applyCount = 0;
 

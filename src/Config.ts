@@ -13,6 +13,7 @@ export type CommandType = "string" | "number" | "user" | "channel" | "text";
 export type MessagePackingType = "none" | "multiple" | "all";
 export type HttpErrorShowToMsg = "hide" | "show";
 export type SourceHttpErrorShowToMsg = "inherit" | HttpErrorShowToMsg | "function";
+export type MsgSendMode = "direct" | "topic";
 
 export interface CommandArg {
   name: string;
@@ -66,6 +67,9 @@ export interface CmdSource {
   sendType: RendererType;
   ejsTemplate?: string;
   cmdLink?: string;
+
+  msgSendMode: MsgSendMode;
+  msgTopic?: string;
 
   httpErrorShowToMsg: SourceHttpErrorShowToMsg;
   httpErrorShowToMsgFn?: string;
@@ -357,6 +361,22 @@ export const Config: Schema<Config> = Schema.intersect([
         ]),
 
         Schema.object({
+          msgSendMode: Schema.union([
+            Schema.const("direct").description("直接傳送"),
+            Schema.const("topic").description("主題推送(需要安裝 message-topic 與 message-topic-service 插件)"),
+          ])
+            .default("direct")
+            .description("消息發送模式"),
+        }),
+        Schema.union([
+          Schema.object({
+            msgSendMode: Schema.const("topic").required(),
+            msgTopic: Schema.string().required().description("推送到的主題，使用.分隔子主題"),
+          }),
+          Schema.object({} as any),
+        ]),
+
+        Schema.object({
           httpErrorShowToMsg: Schema.union([
             CommonSchema.inherit,
             Schema.const("hide").description("隱藏"),
@@ -372,13 +392,15 @@ export const Config: Schema<Config> = Schema.intersect([
             httpErrorShowToMsgFn: Schema.string()
               .role("textarea", { rows: [3, 9] })
               .required()
-              .description("" +
-                "**return** 返回的值將會加入回覆訊息中  \n" +
-                "使用方法見專家模式中的 **_prompt**  \n" +
-                "配置項中不需要加 **<%= %>**  \n" +
-                "#可額外使用  \n" +
-                "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
-                "$error [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)"),
+              .description(
+                "" +
+                  "**return** 返回的值將會加入回覆訊息中  \n" +
+                  "使用方法見專家模式中的 **_prompt**  \n" +
+                  "配置項中不需要加 **<%= %>**  \n" +
+                  "#可額外使用  \n" +
+                  "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
+                  "$error [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)",
+              ),
           }),
           Schema.object({} as any),
         ]),
