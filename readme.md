@@ -107,10 +107,10 @@ attribute: 獲取元素屬性, 相當於 getAttribute(value)
 例子如下:
 
 ```html
-<img class="abc" src="https://cdn.xyz/abc1.img" />
-<img class="abc" src="https://cdn.xyz/abc2.img" />
-<img class="abc" src="https://cdn.xyz/abc3.img" />
-<img class="xyz" src="https://cdn.xyz/xyz.img" />
+<img class="abc" src="https://cdn.xyz/abc1.img"/>
+<img class="abc" src="https://cdn.xyz/abc2.img"/>
+<img class="abc" src="https://cdn.xyz/abc3.img"/>
+<img class="xyz" src="https://cdn.xyz/xyz.img"/>
 ```
 
 想獲取僅限 class 中包含 `abc` 的圖片連結，則可用:
@@ -262,10 +262,13 @@ ejsTemplate: |-
 - 自動回填預設的配置
 - 線上分享配置頁面
 
+### 0.1.68
+
+- 傳送模式-主題推送 指令自動新增訂閱主題選項
+
 ### 0.1.67
 
 - 增加消息發送模式-主題推送
-
 
 ### 0.1.66
 

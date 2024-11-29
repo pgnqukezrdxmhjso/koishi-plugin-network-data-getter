@@ -2,20 +2,20 @@ import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 
-import { Argv, Context, Element, Fragment, HTTP, Session } from "koishi";
+import {Argv, Context, Element, Fragment, h, HTTP, Session} from "koishi";
 import * as OTPAuth from "otpauth";
 
-import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
-import { cmdResData } from "./CmdResData";
+import {CmdSource, CommandArg, CommandOption, Config, OptionValue} from "./Config";
+import {cmdResData} from "./CmdResData";
 import Arrays from "./utils/Arrays";
-import { rendered } from "./Renderer";
-import { cmdReq } from "./CmdReq";
-import { logger } from "./logger";
-import { Channel, GuildMember } from "@satorijs/protocol";
+import {rendered} from "./Renderer";
+import {cmdReq} from "./CmdReq";
+import {logger} from "./logger";
+import {Channel, GuildMember} from "@satorijs/protocol";
 import Strings from "./utils/Strings";
 import KoishiUtil from "./utils/KoishiUtil";
 import Objects from "./utils/Objects";
-import { loadUrl, urlToBase64 } from "./Http";
+import {loadUrl, urlToBase64} from "./Http";
 
 export interface PresetPool {
   presetConstantPool: Record<string, OptionValue>;
@@ -51,7 +51,7 @@ export interface CmdCtx {
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
-async function getGuildMember({ userId, session }: { userId: string; session: Session }) {
+async function getGuildMember({userId, session}: { userId: string; session: Session }) {
   let res: GuildMember;
   await KoishiUtil.forList(
     (member) => {
@@ -62,7 +62,7 @@ async function getGuildMember({ userId, session }: { userId: string; session: Se
       }
       res = {
         ...member,
-        user: { ...member.user },
+        user: {...member.user},
         nick,
         name,
       };
@@ -82,14 +82,14 @@ async function getGuildMember({ userId, session }: { userId: string; session: Se
   return res;
 }
 
-async function getChannel({ channelId, session }: { channelId: string; session: Session }) {
+async function getChannel({channelId, session}: { channelId: string; session: Session }) {
   let res: Channel;
   await KoishiUtil.forList(
     (channel: Channel) => {
       if (channelId !== channel.id && channelId !== channel.name) {
         return;
       }
-      res = { ...channel };
+      res = {...channel};
       res.toString = () => res.id + ":" + res.name;
       return false;
     },
@@ -109,10 +109,10 @@ async function getChannel({ channelId, session }: { channelId: string; session: 
 }
 
 async function handleOptionInfoData({
-  optionInfo,
-  option,
-  argv,
-}: {
+                                      optionInfo,
+                                      option,
+                                      argv,
+                                    }: {
   optionInfo: OptionInfo;
   option: CommandArg | CommandOption;
   argv: Argv;
@@ -156,7 +156,7 @@ async function handleOptionInfoData({
   }
 }
 
-async function handleOptionInfos({ source, argv }: { source: CmdSource; argv: Argv }): Promise<OptionInfoMap> {
+async function handleOptionInfos({source, argv}: { source: CmdSource; argv: Argv }): Promise<OptionInfoMap> {
   const optionInfoMap: OptionInfoMap = {
     map: {},
     infoMap: {},
@@ -211,7 +211,7 @@ const internalFns: { [key in string]: (...args: any[]) => any } = {
       reqConfig?: HTTP.RequestConfig;
     },
   ) {
-    const res = await loadUrl({ ...cmdCtx, ...args });
+    const res = await loadUrl({...cmdCtx, ...args});
     if (typeof res.data === "string") {
       return res.data;
     }
@@ -224,7 +224,7 @@ const internalFns: { [key in string]: (...args: any[]) => any } = {
       reqConfig?: HTTP.RequestConfig;
     },
   ) {
-    return urlToBase64({ ...cmdCtx, ...args });
+    return urlToBase64({...cmdCtx, ...args});
   },
 };
 
@@ -256,7 +256,7 @@ export function generateCodeRunner(
     expandData?: { [k in string]: any };
   },
 ) {
-  const { expandData, presetPool, session, optionInfoMap } = args;
+  const {expandData, presetPool, session, optionInfoMap} = args;
   const iFns = buildInternalFns(args);
   const fnArgTexts = ["$e", iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
   const fnArgs: any[] = [session.event, iFns.fns, presetPool.presetConstantPool ?? {}, presetPool.presetFnPool ?? {}];
@@ -284,7 +284,7 @@ export async function formatOption(
     data?: any;
   },
 ): Promise<string> {
-  let { content } = args;
+  let {content} = args;
   const contentList = [];
   content = content.replace(/<%=([\s\S]+?)%>/g, function (match: string, p1: string) {
     contentList.push(p1);
@@ -296,7 +296,7 @@ export async function formatOption(
 
   const codeRunner = generateCodeRunner({
     ...args,
-    expandData: { data: args.data },
+    expandData: {data: args.data},
   });
 
   const resMap = {};
@@ -319,7 +319,7 @@ export async function formatObjOption(
     compelString: boolean;
   },
 ) {
-  const { obj, compelString, optionInfoMap } = args;
+  const {obj, compelString, optionInfoMap} = args;
   await Objects.thoroughForEach(obj, async (value, key, obj) => {
     if (typeof value === "string") {
       obj[key] = await formatOption({
@@ -342,7 +342,8 @@ export async function formatObjOption(
       }
       try {
         eval(`obj.${oKey} = optionInfo.value` + (compelString ? '+""' : ""));
-      } catch (_e) {}
+      } catch (_e) {
+      }
     }
 
   return obj;
@@ -356,7 +357,7 @@ export default function () {
     presetFnPoolFnArg: "{}={}",
   };
 
-  function initPresetConstants({ ctx, config }: { ctx: Context; config: Config }) {
+  function initPresetConstants({ctx, config}: { ctx: Context; config: Config }) {
     if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetConstants)) {
       return;
     }
@@ -378,7 +379,7 @@ export default function () {
     presetPool.presetConstantPoolFnArg = "{" + Object.keys(presetPool.presetConstantPool).join(",") + "}={}";
   }
 
-  function initPresetFns({ ctx, config }: { ctx: Context; config: Config }) {
+  function initPresetFns({ctx, config}: { ctx: Context; config: Config }) {
     if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
       return;
     }
@@ -403,9 +404,9 @@ export default function () {
     presetPool.presetFnPoolFnArg = "{" + Object.keys(presetPool.presetFnPool).join(",") + "}={}";
   }
 
-  function initConfig({ ctx, config }: { ctx: Context; config: Config }) {
-    initPresetConstants({ ctx, config });
-    initPresetFns({ ctx, config });
+  function initConfig({ctx, config}: { ctx: Context; config: Config }) {
+    initPresetConstants({ctx, config});
+    initPresetFns({ctx, config});
   }
 
   function onDispose() {
@@ -416,7 +417,7 @@ export default function () {
     if (!HTTP.Error.is(e)) {
       throw e;
     }
-    const { source, config } = cmdCtx;
+    const {source, config} = cmdCtx;
     const httpErrorShowToMsg =
       source.httpErrorShowToMsg !== "inherit" ? source.httpErrorShowToMsg : config.httpErrorShowToMsg;
     let fragment = `執行指令 ${source.command} 失敗: `;
@@ -450,10 +451,10 @@ export default function () {
         break;
       }
     }
-    return fragment;
+    return h.parse(fragment);
   }
 
-  async function send({ ctx, config, source, argv }: { ctx: Context; config: Config; source: CmdSource; argv: Argv }) {
+  async function send({ctx, config, source, argv}: { ctx: Context; config: Config; source: CmdSource; argv: Argv }) {
     logger.debug("args: ", argv.args);
     logger.debug("options: ", argv.options);
 
@@ -473,7 +474,7 @@ export default function () {
     let fragment: Fragment;
     let isError = false;
     try {
-      cmdCtx.optionInfoMap = await handleOptionInfos({ source, argv });
+      cmdCtx.optionInfoMap = await handleOptionInfos({source, argv});
       const res: HTTP.Response = await cmdReq(cmdCtx);
       const resData = cmdResData(source, res);
       fragment = await rendered({
@@ -489,18 +490,18 @@ export default function () {
       return;
     }
 
-    const isTopic = !isError && ctx.messageTopicService && source.msgSendMode === "topic" && source.msgTopic;
+    const isTopic = !isError && ctx.messageTopicService && source.msgSendMode === "topic";
     if (source.msgSendMode === "direct" || !isTopic) {
       const [msg] = await session.send(fragment);
       if (source.recall > 0) {
         ctx.setTimeout(() => session.bot.deleteMessage(session.channelId, msg), source.recall * 60000);
       }
     } else {
-      await ctx.messageTopicService.sendMessageToTopic(source.msgTopic, fragment, {
-        retractTime: source.recall > 0 ? source.recall * 60 : undefined,
+      await ctx.messageTopicService.sendMessageToTopic(source.msgTopic || ('net-get.' + source.command), fragment, {
+        retractTime: source.recall > 0 ? source.recall * 60000 : undefined,
       });
     }
   }
 
-  return { send, initConfig, onDispose };
+  return {send, initConfig, onDispose};
 }

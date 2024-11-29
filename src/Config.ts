@@ -1,4 +1,4 @@
-import { Dict, HTTP, Schema } from "koishi";
+import {Dict, HTTP, Schema} from "koishi";
 
 import PresetFns from "./PresetFns";
 import fs from "node:fs";
@@ -265,10 +265,10 @@ export const Config: Schema<Config> = Schema.intersect([
               .collapse()
               .description(
                 "預設函式，可在後續配置中使用  \n" +
-                  "可使用的模組: 變數名  \n" +
-                  "[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n" +
-                  "[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n" +
-                  "[http](https://koishi.chat/zh-CN/plugins/develop/http.html): http  \n",
+                "可使用的模組: 變數名  \n" +
+                "[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n" +
+                "[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n" +
+                "[http](https://koishi.chat/zh-CN/plugins/develop/http.html): http  \n",
               ),
           }),
         ]),
@@ -289,10 +289,12 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.const("none").description("不合並"),
             Schema.const("multiple").description("合併多條"),
             Schema.const("all").description("全部合併"),
-          ]).description("訊息合併"),
+          ])
+            .default("inherit")
+            .description("訊息合併"),
           recall: Schema.number().default(0).description("訊息撤回時限(分鐘,0為不撤回)"),
           sourceUrl: Schema.string()
-            .role("textarea", { rows: [1, 9] })
+            .role("textarea", {rows: [1, 9]})
             .required()
             .description("請求地址"),
           requestMethod: Schema.union(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "PURGE", "LINK", "UNLINK"])
@@ -346,14 +348,14 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             sendType: Schema.const("ejs").required(),
             ejsTemplate: Schema.string()
-              .role("textarea", { rows: [3, 9] })
+              .role("textarea", {rows: [3, 9]})
               .required()
               .description("EJS 模板"),
           }),
           Schema.object({
             sendType: Schema.const("cmdLink").required(),
             cmdLink: Schema.string()
-              .role("textarea", { rows: [2, 9] })
+              .role("textarea", {rows: [2, 9]})
               .required()
               .description("指令鏈"),
           }),
@@ -363,7 +365,7 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.object({
           msgSendMode: Schema.union([
             Schema.const("direct").description("直接傳送"),
-            Schema.const("topic").description("主題推送(需要安裝 message-topic 與 message-topic-service 插件)"),
+            Schema.const("topic").description("主題推送(需要安裝 message-topic-service 插件)"),
           ])
             .default("direct")
             .description("消息發送模式"),
@@ -371,7 +373,11 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.union([
           Schema.object({
             msgSendMode: Schema.const("topic").required(),
-            msgTopic: Schema.string().required().description("推送到的主題，使用.分隔子主題"),
+            msgTopic: Schema.string().required().description("" +
+              "推送到的主題，使用.分隔子主題  \n" +
+              "不填寫時預設使用 net-get.指令名  \n" +
+              "使用當前指令的 --topic-on 訂閱推送 --topic-off 退訂推送"
+            ),
           }),
           Schema.object({} as any),
         ]),
@@ -390,16 +396,16 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             httpErrorShowToMsg: Schema.const("function").required(),
             httpErrorShowToMsgFn: Schema.string()
-              .role("textarea", { rows: [3, 9] })
+              .role("textarea", {rows: [3, 9]})
               .required()
               .description(
                 "" +
-                  "**return** 返回的值將會加入回覆訊息中  \n" +
-                  "使用方法見專家模式中的 **_prompt**  \n" +
-                  "配置項中不需要加 **<%= %>**  \n" +
-                  "#可額外使用  \n" +
-                  "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
-                  "$error [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)",
+                "**return** 返回的值將會加入回覆訊息中  \n" +
+                "使用方法見專家模式中的 **_prompt**  \n" +
+                "配置項中不需要加 **<%= %>**  \n" +
+                "#可額外使用  \n" +
+                "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
+                "$error [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)",
               ),
           }),
           Schema.object({} as any),
@@ -428,10 +434,10 @@ export const Config: Schema<Config> = Schema.intersect([
                         .default("string")
                         .description(
                           "型別  \n" +
-                            "字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n" +
-                            "用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
-                            "頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
-                            "長文字型別會將後續所有內容全部當作一個整體",
+                          "字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n" +
+                          "用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
+                          "頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
+                          "長文字型別會將後續所有內容全部當作一個整體",
                         ),
                       required: Schema.boolean().default(false).description("必填"),
                       autoOverwrite: Schema.boolean().default(false).description("自動覆寫body中同名key"),
@@ -466,10 +472,10 @@ export const Config: Schema<Config> = Schema.intersect([
                         .default("boolean")
                         .description(
                           "型別  \n" +
-                            "字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n" +
-                            "用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
-                            "頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
-                            "長文字型別會將後續所有內容全部當作一個整體",
+                          "字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n" +
+                          "用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
+                          "頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
+                          "長文字型別會將後續所有內容全部當作一個整體",
                         ),
                     }),
                     Schema.union([
@@ -503,15 +509,15 @@ export const Config: Schema<Config> = Schema.intersect([
                   .description("選項配置"),
                 _prompt: Schema.never().description(
                   "#請求地址 | 請求頭 | 請求資料 | 指令鏈 | EJS 模板 配置項中可使用  \n" +
-                    "**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n" +
-                    "**<%=名稱%>** 插入同名的預設常量或引數或選項  \n" +
-                    "**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
-                    "**<%= %>** 中允許使用 js程式碼 | 內建函式 | 預設常量 | 預設函式 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n" +
-                    "#指令鏈 | EJS 模板 配置項中可額外使用  \n" +
-                    "**<%=$data%>** 插入返回的資料  \n" +
-                    "#內建函式  \n" +
-                    "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
-                    "**await $urlToBase64({url,reqConfig})**  \n",
+                  "**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n" +
+                  "**<%=名稱%>** 插入同名的預設常量或引數或選項  \n" +
+                  "**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
+                  "**<%= %>** 中允許使用 js程式碼 | 內建函式 | 預設常量 | 預設函式 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n" +
+                  "#指令鏈 | EJS 模板 配置項中可額外使用  \n" +
+                  "**<%=$data%>** 插入返回的資料  \n" +
+                  "#內建函式  \n" +
+                  "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
+                  "**await $urlToBase64({url,reqConfig})**  \n",
                 ),
                 requestHeaders: Schema.dict(String).role("table").default({}).description("請求頭"),
                 requestDataType: Schema.union([

@@ -1,12 +1,12 @@
-import { Fragment, h } from "koishi";
-import { render } from "ejs";
+import {Fragment, h} from "koishi";
+import {render} from "ejs";
 
-import { buildInternalFns, CmdCtx, formatOption } from "./Core";
-import { RendererType } from "./Config";
+import {buildInternalFns, CmdCtx, formatOption} from "./Core";
+import {RendererType} from "./Config";
 import Strings from "./utils/Strings";
-import { ResData } from "./CmdResData";
-import { urlToBase64 } from "./Http";
-import { logger } from "./logger";
+import {ResData} from "./CmdResData";
+import {urlToBase64} from "./Http";
+import {logger} from "./logger";
 
 interface Renderer {
   verify?: (s: string) => boolean;
@@ -23,7 +23,7 @@ function buildMedia(type: string) {
       resData: ResData;
     },
   ) => {
-    const { resData, source } = args;
+    const {resData, source} = args;
     if (!resData.texts) {
       throw "沒有符合條件的結果";
     }
@@ -51,7 +51,7 @@ function buildMedia(type: string) {
 
 export const rendererMap: { [key in RendererType]: Renderer } = {
   text: {
-    build: async ({ resData }) => {
+    build: async ({resData}) => {
       if (!resData.texts) {
         return JSON.stringify(resData.json);
       }
@@ -76,7 +76,7 @@ export const rendererMap: { [key in RendererType]: Renderer } = {
   },
   ejs: {
     build: async (args) => {
-      const { resData, source, presetPool, session, optionInfoMap } = args;
+      const {resData, source, presetPool, session, optionInfoMap} = args;
       try {
         const data = resData.json ?? resData.texts;
         if (!source.ejsTemplate) {
@@ -100,7 +100,7 @@ export const rendererMap: { [key in RendererType]: Renderer } = {
           },
         );
         code = code.replace(/\n\n/g, "\n");
-        return code;
+        return h.parse(code);
       } catch (err) {
         logger.error("Error while parsing ejs data and json:");
         logger.error(err);
@@ -128,11 +128,9 @@ function handleMsgPacking(args: CmdCtx, fragment: Fragment): Fragment {
   if (!fragment) {
     return fragment;
   }
-  const { config, source } = args;
-  let msgPackingType = source.messagePackingType || config.messagePackingType;
-  if (msgPackingType === "inherit") {
-    msgPackingType = config.messagePackingType;
-  }
+  const {config, source} = args;
+  const msgPackingType = source.messagePackingType !== 'inherit' ? source.messagePackingType : config.messagePackingType;
+
   if (!msgPackingType || msgPackingType === "none") {
     return fragment;
   }
@@ -144,14 +142,18 @@ function handleMsgPacking(args: CmdCtx, fragment: Fragment): Fragment {
   }
 
   const forward = h.parse("<message forward></message>");
-  forward[0].children = fragment.map((f) => {
-    if (typeof f === "string") {
-      return h.parse(`<message>${f}</message>`)[0];
-    }
+  forward[0].children.push(...fragment.map((f) => {
     const message = h.parse(`<message></message>`)[0];
-    message.children = f instanceof Array ? f : [f];
+
+    if (typeof f === "string") {
+      message.children.push(...h.parse(f));
+    } else if (f instanceof Array) {
+      message.children.push(...f);
+    } else {
+      message.children.push(f);
+    }
     return message;
-  });
+  }));
   return forward;
 }
 
@@ -160,7 +162,7 @@ export async function rendered(
     resData: ResData;
   },
 ) {
-  const { source } = args;
+  const {source} = args;
   const renderer = rendererMap[source.sendType];
   if (!renderer) {
     throw `不支援的渲染型別: ${source.sendType}`;

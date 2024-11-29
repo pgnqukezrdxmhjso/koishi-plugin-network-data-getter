@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Argv, Command, Context } from "koishi";
+import {Argv, Command, Context} from "koishi";
 // noinspection ES6UnusedImports
 import {} from "@koishijs/plugin-console";
 // noinspection ES6UnusedImports
@@ -9,8 +9,8 @@ import {} from "koishi-plugin-umami-statistics-service";
 import {} from "koishi-plugin-message-topic-service";
 
 import Strings from "./utils/Strings";
-import { Config } from "./Config";
-import { logger } from "./logger";
+import {Config} from "./Config";
+import {logger} from "./logger";
 import Core from "./Core";
 import Umami from "./Umami";
 
@@ -19,7 +19,7 @@ export const inject = {
   optional: ["messageTopicService"],
 };
 
-export { Config } from "./Config";
+export {Config} from "./Config";
 export const name = "network-data-getter";
 // noinspection JSUnusedGlobalSymbols
 export const reusable = true;
@@ -51,8 +51,8 @@ export function apply(ctx: Context, config: Config) {
     });
   }
 
-  const { initConfig, onDispose, send } = Core();
-  initConfig({ ctx, config });
+  const {initConfig, onDispose, send} = Core();
+  initConfig({ctx, config});
   ctx.on("dispose", () => {
     applyCount--;
     if (applyCount < 0) {
@@ -129,7 +129,7 @@ export function apply(ctx: Context, config: Config) {
     const command = ctx
       .command(def, source.desc ?? "", cmdConfig)
       .alias(...source.alias)
-      .action((argv) => {
+      .action(async (argv) => {
         if (Date.now() - lastUmami > 24 * 60 * 60 * 1000) {
           lastUmami = Date.now();
           Umami.send({
@@ -140,7 +140,17 @@ export function apply(ctx: Context, config: Config) {
             },
           }).then();
         }
-        return send({ ctx, config, source, argv });
+        if (source.msgSendMode === 'topic' && typeof argv.options['topic'] === "boolean") {
+          await ctx.messageTopicService.topicSubscribe({
+            platform: argv.session.bot.platform,
+            selfId: argv.session.bot.selfId,
+            channelId: argv.session.channelId,
+            bindingKey: source.msgTopic || ('net-get.' + source.command),
+            enable: argv.options['topic']
+          })
+          return (argv.options['topic'] ? '訂閱' : '退訂') + '成功'
+        }
+        return send({ctx, config, source, argv});
       });
 
     if (source.expertMode)
@@ -162,13 +172,18 @@ export function apply(ctx: Context, config: Config) {
         }
         command.option(option.name, desc.join(" "), config);
       });
+
+    if (source.msgSendMode === 'topic') {
+      command.option('topic', "--topic-on 訂閱推送", {value: true});
+      command.option('topic', "--topic-off 退訂推送", {value: false});
+    }
   });
 }
 
 const cmdConfig: Command.Config = {
   checkUnknown: true,
   checkArgCount: true,
-  handleError: (err, { command }) => {
+  handleError: (err, {command}) => {
     logger.error(err);
     return `執行指令 ${command.displayName} 失敗`;
   },
