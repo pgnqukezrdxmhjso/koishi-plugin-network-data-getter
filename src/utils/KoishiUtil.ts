@@ -1,5 +1,4 @@
 import { List } from "@satorijs/protocol";
-import { logger } from "../logger";
 
 const KoishiUtil = {
   async forList<S>(
@@ -13,8 +12,7 @@ const KoishiUtil = {
       let res: List<S>;
       try {
         res = await listFn.apply(that, [...args, next]);
-      } catch (e) {
-        logger.error(e);
+      } catch (_e) {
         return;
       }
       next = res.next;

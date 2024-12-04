@@ -18,5 +18,5 @@
   </svg>
 </template>
 <style module lang="scss">
-@import "../common";
+@use "../common";
 </style>

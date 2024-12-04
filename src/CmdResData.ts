@@ -1,105 +1,96 @@
 import { parse } from "node-html-parser";
-import { HTTP, Random } from "koishi";
-import { parseJson, parseObjectToArr } from "./utils";
-import { BaseProcessorType, CmdSource } from "./Config";
+import { Context, HTTP } from "koishi";
+import { BaseProcessorType, Config } from "./Config";
+import Objects from "./utils/Objects";
+import { CmdCtx } from "./CoreCmd";
 import Strings from "./utils/Strings";
-import { rendererMap } from "./Renderer";
-import Arrays from "./utils/Arrays";
+import CmdCommon from "./CmdCommon";
+import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
-export interface ResData {
-  json?: Record<any, any> | [];
-  texts?: string[];
-}
+export type ResData = { [k in any]: any } | [];
 
 type BaseProcessorMap = {
-  [key in BaseProcessorType]: (res: HTTP.Response, source: CmdSource) => ResData;
+  [key in BaseProcessorType]: (res: HTTP.Response, cmdCtx: CmdCtx) => ResData;
 };
 
-function handleTexts(texts: string[], source: CmdSource) {
-  texts = texts.filter((text) => Strings.isNotBlank(text));
-  const verify = rendererMap[source.sendType]?.verify;
-  if (verify) {
-    texts = texts.filter((text) => verify(text));
-  }
-  if (source.pickOneRandomly) {
-    texts = [Random.pick(texts)];
-  }
-  if (Arrays.isEmpty(texts)) {
-    throw "沒有符合條件的結果";
-  }
-  return texts;
-}
+export default class CmdResData implements BeanTypeInterface {
+  private ctx: Context;
+  private config: Config;
+  private cmdCommon: CmdCommon;
 
-const baseProcessorMap: BaseProcessorMap = {
-  json: (res: HTTP.Response, source: CmdSource) => {
-    let data = res.data;
-    if (data instanceof ArrayBuffer) {
-      data = JSON.parse(Buffer.from(data).toString());
-    } else if (typeof data === "string") {
-      data = JSON.parse(data);
-    }
-    const key = source?.jsonKey;
-    let texts: any[];
-    let target = data;
-    if (key) {
-      target = parseJson(data, key.replaceAll(/[;{}]/g, ""));
-    }
-    texts = parseObjectToArr(target);
-    for (let i = 0; i < texts.length; i++) {
-      if (typeof texts[i] !== "string") {
-        texts[i] += "";
-      }
-    }
-    texts = handleTexts(texts, source);
-    return { texts };
-  },
-  txt: (res: HTTP.Response, source: CmdSource) => {
-    let data = res.data;
-    if (data instanceof ArrayBuffer) {
-      data = Buffer.from(data).toString();
-    } else if (typeof data !== "string") {
-      try {
-        data = JSON.stringify(data);
-      } catch (_e) {
-        data = data.toString();
-      }
-    }
-    let texts = data.split("\n");
-    texts = handleTexts(texts, source);
-    return { texts };
-  },
-  html: (res: HTTP.Response, source: CmdSource) => {
-    let data = res.data;
-    if (data instanceof ArrayBuffer) {
-      data = Buffer.from(data).toString();
-    }
-    const root = parse(data);
-    let texts = Array.from(root.querySelectorAll(source.jquerySelector ?? "p")).map((e) =>
-      source.attribute ? e.getAttribute(source.attribute) : e.structuredText,
-    );
-    texts = handleTexts(texts, source);
-    return { texts };
-  },
-  resource: (res: HTTP.Response) => {
-    return {
-      texts: [`data:${res.headers.get("Content-Type")};base64,` + Buffer.from(res.data).toString("base64")],
-    };
-  },
-  plain: (res: HTTP.Response) => {
-    let data = res.data;
-    if (data instanceof ArrayBuffer) {
-      data = Buffer.from(data).toString();
-    }
-    return {
-      json: typeof data === "string" ? JSON.parse(data) : data,
-    };
-  },
-};
-
-export function cmdResData(source: CmdSource, res: HTTP.Response): ResData {
-  const parser = baseProcessorMap[source.dataType];
-  if (!parser) {
-    throw new Error(`未知的資料返回型別: ${source.dataType}`);
+  constructor(beanHelper: BeanHelper) {
+    this.ctx = beanHelper.getByName("ctx");
+    this.config = beanHelper.getByName("config");
+    this.cmdCommon = beanHelper.instance(CmdCommon);
   }
-  return parser(res, source);
+
+  baseProcessorMap: BaseProcessorMap = {
+    json: (res, { source }) => {
+      let data = res.data;
+      if (data instanceof ArrayBuffer) {
+        data = JSON.parse(Buffer.from(data).toString());
+      } else if (typeof data === "string") {
+        data = JSON.parse(data);
+      }
+      if (source.jsonKey) {
+        data = Objects.getValue(data, source.jsonKey.replace(/[;{}]/g, ""));
+      }
+      return data;
+    },
+    txt: (res) => {
+      const data = res.data ?? "";
+      let text: string = data;
+      if (data instanceof ArrayBuffer) {
+        text = Buffer.from(data).toString();
+      } else if (typeof data !== "string") {
+        try {
+          text = JSON.stringify(data);
+        } catch (_e) {
+          text = data.toString();
+        }
+      }
+      return text.split(/[\r\n]+/).filter((s) => Strings.isNotBlank(s));
+    },
+    html: (res, { source }) => {
+      let data = res.data;
+      if (data instanceof ArrayBuffer) {
+        data = Buffer.from(data).toString();
+      }
+      const root = parse(data);
+      return Array.from(root.querySelectorAll(source.jquerySelector ?? "p"), (e) =>
+        source.attribute ? e.getAttribute(source.attribute) : e.structuredText,
+      ).filter((s) => Strings.isNotBlank(s));
+    },
+    resource: (res) => {
+      return [`data:${res.headers.get("Content-Type")};base64,` + Buffer.from(res.data).toString("base64")];
+    },
+    plain: (res) => {
+      let data = res.data;
+      if (data instanceof ArrayBuffer) {
+        data = Buffer.from(data).toString();
+      }
+      return typeof data === "string" ? JSON.parse(data) : data;
+    },
+    function: async (res, cmdCtx) => {
+      if (!cmdCtx.source.dataFunction) {
+        return;
+      }
+      const data = await this.cmdCommon.generateCodeRunner(cmdCtx, {
+        response: res,
+      })(cmdCtx.source.dataFunction);
+      return data instanceof Object ? data : [data];
+    },
+  };
+
+  async cmdResData(cmdCtx: CmdCtx, res: HTTP.Response): Promise<ResData> {
+    const parser = this.baseProcessorMap[cmdCtx.source.dataType];
+    if (!parser) {
+      throw new Error(`未知的響應資料處理器: ${cmdCtx.source.dataType}`);
+    }
+    const resData = parser(res, cmdCtx);
+    if (resData === undefined || resData === null) {
+      throw "沒有獲取到資料";
+    }
+    return resData;
+  }
 }

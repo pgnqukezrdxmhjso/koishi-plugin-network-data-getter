@@ -1,161 +1,156 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import { HTTP } from "koishi";
+import { Context, HTTP } from "koishi";
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
-import { CmdCtx, formatObjOption, formatOption } from "./Core";
-import { getCmdHttpClient, loadUrl } from "./Http";
-import { debugInfo } from "./logger";
+import { CmdCtx } from "./CoreCmd";
+import CmdCommon from "./CmdCommon";
+import CmdHttp from "./CmdHttp";
+import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
+import { Config } from "./Config";
 
-async function handleReqExpert(
-  args: CmdCtx & {
-    requestConfig: HTTP.RequestConfig;
-  },
-) {
-  const { ctx, source, optionInfoMap, requestConfig } = args;
+export default class CmdReq implements BeanTypeInterface {
+  private ctx: Context;
+  private config: Config;
+  private cmdCommon: CmdCommon;
+  private cmdHttp: CmdHttp;
 
-  const expert = source.expert;
-  if (!source.expertMode || !expert) {
-    return;
+  constructor(beanHelper: BeanHelper) {
+    this.ctx = beanHelper.getByName("ctx");
+    this.config = beanHelper.getByName("config");
+    this.cmdCommon = beanHelper.instance(CmdCommon);
+    this.cmdHttp = beanHelper.instance(CmdHttp);
   }
 
-  requestConfig.headers = { ...(expert.requestHeaders || {}) };
-  await formatObjOption({
-    ...args,
-    obj: requestConfig.headers,
-    compelString: true,
-  });
-
-  switch (expert.requestDataType) {
-    case "raw": {
-      if (Strings.isBlank(expert.requestRaw)) {
-        break;
-      }
-      if (expert.requestJson) {
-        requestConfig.data = JSON.parse(expert.requestRaw);
-        await formatObjOption({
-          ...args,
-          obj: requestConfig.data,
-          compelString: false,
-        });
-      } else {
-        requestConfig.data = await formatOption({ ...args, content: expert.requestRaw });
-      }
-      break;
+  private reqDataToJson(data: any) {
+    if (!data) {
+      return data;
     }
-    case "x-www-form-urlencoded": {
-      if (Objects.isEmpty(expert.requestForm)) {
-        break;
-      }
-      requestConfig.data = new URLSearchParams(
-        await formatObjOption({
-          ...args,
-          obj: { ...expert.requestForm },
-          compelString: true,
-        }),
-      );
-      break;
-    }
-    case "form-data": {
-      if (Objects.isEmpty(expert.requestForm) && Objects.isEmpty(expert.requestFormFiles)) {
-        break;
-      }
-      const form = new FormData();
-      requestConfig.data = form;
-      const data = await formatObjOption({
-        ...args,
-        obj: { ...(expert.requestForm || {}) },
-        compelString: true,
-      });
-      for (const key in data) {
-        form.append(key, data[key]);
-      }
-
-      const fileOverwriteKeys = [];
-      for (const key in optionInfoMap.infoMap) {
-        const optionInfo = optionInfoMap.infoMap[key];
-        const oKey = optionInfo.overwriteKey || key;
-        if (
-          !optionInfo.autoOverwrite ||
-          !optionInfo.isFileUrl ||
-          Strings.isBlank(optionInfo.value + "") ||
-          typeof expert.requestFormFiles[oKey] === "undefined"
-        ) {
-          continue;
+    if (data instanceof FormData) {
+      const newData = {};
+      for (const datum of data) {
+        const [key, value] = datum;
+        if (value instanceof Blob) {
+          newData[key] = value.name;
+        } else {
+          newData[key] = value;
         }
-
-        const fileRes = await loadUrl({
-          ...args,
-          url: optionInfo.value as string,
-          reqConfig: {
-            responseType: "blob",
-          },
-        });
-
-        form.append(oKey, fileRes.data, optionInfo.fileName || (await Files.getFileNameByBlob(fileRes.data)));
-        fileOverwriteKeys.push(oKey);
       }
-
-      for (const key in expert.requestFormFiles) {
-        if (fileOverwriteKeys.includes(key)) {
-          continue;
-        }
-        const item = expert.requestFormFiles[key];
-        const filePath = path.join(ctx.baseDir, item);
-        const fileBlob = new Blob([fs.readFileSync(filePath)]);
-        form.append(key, fileBlob, path.parse(filePath).base);
-      }
-      break;
+      return newData;
     }
-  }
-}
-
-function reqDataToJson(data: any) {
-  if (!data) {
+    if (data instanceof URLSearchParams) {
+      return data.toString();
+    }
     return data;
   }
-  if (data instanceof FormData) {
-    const newData = {};
-    for (const datum of data) {
-      const [key, value] = datum;
-      if (value instanceof Blob) {
-        newData[key] = value.name;
-      } else {
-        newData[key] = value;
+
+  debugInfo(content: string | (() => string)) {
+    if (!this.config.expertMode || !this.config.expert.showDebugInfo) {
+      return;
+    }
+    this.ctx.logger.info(typeof content === "string" ? content : content());
+  }
+
+  private reqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
+    this.debugInfo(() => {
+      const rc = { ...requestConfig };
+      rc.data = this.reqDataToJson(rc.data);
+      return (
+        `cmdNetReq; ${cmdCtx.smallSession.content}\n` +
+        `url: ${url}\n` +
+        `method: ${cmdCtx.source.requestMethod}\n` +
+        `config: ${JSON.stringify(rc, null, 2)}`
+      );
+    });
+  }
+
+  private async handleReqExpert(cmdCtx: CmdCtx, requestConfig: HTTP.RequestConfig) {
+    const expert = cmdCtx.source.expert;
+    if (!cmdCtx.source.expertMode || !expert) {
+      return;
+    }
+
+    requestConfig.headers = { ...(expert.requestHeaders || {}) };
+    await this.cmdCommon.formatObjOption(cmdCtx, requestConfig.headers, true);
+
+    switch (expert.requestDataType) {
+      case "raw": {
+        if (Strings.isBlank(expert.requestRaw)) {
+          break;
+        }
+        if (expert.requestJson) {
+          requestConfig.data = JSON.parse(expert.requestRaw);
+          await this.cmdCommon.formatObjOption(cmdCtx, requestConfig.data, false);
+        } else {
+          requestConfig.data = await this.cmdCommon.formatOption(cmdCtx, expert.requestRaw);
+        }
+        break;
+      }
+      case "x-www-form-urlencoded": {
+        if (Objects.isEmpty(expert.requestForm)) {
+          break;
+        }
+        requestConfig.data = new URLSearchParams(
+          await this.cmdCommon.formatObjOption(cmdCtx, { ...expert.requestForm }, true),
+        );
+        break;
+      }
+      case "form-data": {
+        if (Objects.isEmpty(expert.requestForm) && Objects.isEmpty(expert.requestFormFiles)) {
+          break;
+        }
+        const form = new FormData();
+        requestConfig.data = form;
+        const data = await this.cmdCommon.formatObjOption(cmdCtx, { ...(expert.requestForm || {}) }, true);
+        for (const key in data) {
+          form.append(key, data[key]);
+        }
+
+        const fileOverwriteKeys = [];
+        for (const key in cmdCtx.optionInfoMap.infoMap) {
+          const optionInfo = cmdCtx.optionInfoMap.infoMap[key];
+          const oKey = optionInfo.overwriteKey || key;
+          if (
+            !optionInfo.autoOverwrite ||
+            !optionInfo.isFileUrl ||
+            Strings.isBlank(optionInfo.value + "") ||
+            typeof expert.requestFormFiles[oKey] === "undefined"
+          ) {
+            continue;
+          }
+
+          const fileRes = await this.cmdHttp.loadUrl(cmdCtx, optionInfo.value as string, { responseType: "blob" });
+
+          form.append(oKey, fileRes.data, optionInfo.fileName || (await Files.getFileNameByBlob(fileRes.data)));
+          fileOverwriteKeys.push(oKey);
+        }
+
+        for (const key in expert.requestFormFiles) {
+          if (fileOverwriteKeys.includes(key)) {
+            continue;
+          }
+          const item = expert.requestFormFiles[key];
+          const filePath = path.join(this.ctx.baseDir, item);
+          const fileBlob = new Blob([fs.readFileSync(filePath)]);
+          form.append(key, fileBlob, path.parse(filePath).base);
+        }
+        break;
       }
     }
-    return newData;
   }
-  if (data instanceof URLSearchParams) {
-    return data.toString();
+
+  async cmdReq(cmdCtx: CmdCtx) {
+    const requestConfig: HTTP.RequestConfig = {};
+    await this.handleReqExpert(cmdCtx, requestConfig);
+    const httpClient = this.cmdHttp.getCmdHttpClient(cmdCtx.source);
+    const url = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.sourceUrl);
+    this.reqLog(cmdCtx, url, requestConfig);
+
+    const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
+
+    this.debugInfo(() => `cmdNetRes; ${cmdCtx.smallSession.content}\n${JSON.stringify(res, null, 1)}`);
+    return res;
   }
-  return data;
-}
-
-function reqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
-  debugInfo(cmdCtx, () => {
-    const rc = { ...requestConfig };
-    rc.data = reqDataToJson(rc.data);
-    return (
-      `cmdNetReq; ${cmdCtx.session.content}\n` +
-      `url: ${url}\n` +
-      `method: ${cmdCtx.source.requestMethod}\n` +
-      `config: ${JSON.stringify(rc, null, 2)}`
-    );
-  });
-}
-
-export async function cmdReq(cmdCtx: CmdCtx) {
-  const requestConfig: HTTP.RequestConfig = {};
-  await handleReqExpert({ ...cmdCtx, requestConfig });
-  const httpClient = getCmdHttpClient({ ctx: cmdCtx.ctx, config: cmdCtx.config, source: cmdCtx.source });
-  const url = await formatOption({ ...cmdCtx, content: cmdCtx.source.sourceUrl });
-  reqLog(cmdCtx, url, requestConfig);
-
-  const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
-
-  debugInfo(cmdCtx, () => `cmdNetRes; ${cmdCtx.session.content}\n${JSON.stringify(res, null, 1)}`);
-  return res;
 }

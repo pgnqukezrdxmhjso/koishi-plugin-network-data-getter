@@ -107,10 +107,10 @@ attribute: 獲取元素屬性, 相當於 getAttribute(value)
 例子如下:
 
 ```html
-<img class="abc" src="https://cdn.xyz/abc1.img"/>
-<img class="abc" src="https://cdn.xyz/abc2.img"/>
-<img class="abc" src="https://cdn.xyz/abc3.img"/>
-<img class="xyz" src="https://cdn.xyz/xyz.img"/>
+<img class="abc" src="https://cdn.xyz/abc1.img" alt=""/>
+<img class="abc" src="https://cdn.xyz/abc2.img" alt=""/>
+<img class="abc" src="https://cdn.xyz/abc3.img" alt=""/>
+<img class="xyz" src="https://cdn.xyz/xyz.img" alt=""/>
 ```
 
 想獲取僅限 class 中包含 `abc` 的圖片連結，則可用:
@@ -252,15 +252,24 @@ ejsTemplate: |-
 ### TODO
 
 - 預設函式新增全域性變數池功能(或許是直接用快取服務
-- 增加資料處理器功能，對資料進行額外的自定義處理
 - 增加 `渲染模板系列` `Open Graph Protocol` `rss` 渲染型別
 - 渲染模板系列 `svg` `psd` `htmlCode` `htmlUrl`
 - 渲染網路代理
-- 增加定時執行指令功能（計劃任務、間隔）
 - 定時執行指令功能，先使用head請求判斷差異
 - 支援處理動態網頁
 - 自動回填預設的配置
 - 線上分享配置頁面
+
+### 0.2.0
+
+- 增加定時執行指令功能
+- 程式碼結構調整
+
+### 0.1.69
+
+- 資料返回型別改名為響應資料處理器
+- 新增 響應資料處理器-自定義函式
+- pickOneRandomly配置項的邏輯移動到渲染器中
 
 ### 0.1.68
 

@@ -99,7 +99,7 @@ const toCmd = (cmd: string) => {
 </script>
 
 <style module lang="scss">
-@import "../assets/common";
+@use "../assets/common";
 
 .container {
   position: absolute;
