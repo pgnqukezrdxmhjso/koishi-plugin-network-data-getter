@@ -7,6 +7,10 @@ import {} from "@koishijs/plugin-console";
 import {} from "koishi-plugin-umami-statistics-service";
 // noinspection ES6UnusedImports
 import {} from "koishi-plugin-message-topic-service";
+// noinspection ES6UnusedImports
+import {} from "koishi-plugin-cron";
+// noinspection ES6UnusedImports
+import {} from "@koishijs/cache";
 import { Config } from "./Config";
 import CoreCmd from "./CoreCmd";
 import CoreAnonymousStatistics from "./CoreAnonymousStatistics";
@@ -15,7 +19,7 @@ import { BeanHelper } from "./utils/BeanHelper";
 
 export const inject = {
   required: ["http", "umamiStatisticsService"],
-  optional: ["messageTopicService", "cron"],
+  optional: ["messageTopicService", "cron", "cache"],
 };
 
 export { Config } from "./Config";

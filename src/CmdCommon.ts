@@ -57,25 +57,29 @@ export default class CmdCommon implements BeanTypeInterface {
   generateCodeRunner(cmdCtx: CmdCtx, expandData?: { [k in string]: any }) {
     const { presetPool, smallSession, optionInfoMap } = cmdCtx;
     const iFns = this.buildInternalFns(cmdCtx);
-    const fnArgTexts = ["$e", iFns.arg, presetPool.presetConstantPoolFnArg, presetPool.presetFnPoolFnArg];
-    const fnArgs: any[] = [
-      smallSession.event,
-      iFns.fns,
-      presetPool.presetConstantPool ?? {},
-      presetPool.presetFnPool ?? {},
-    ];
+    const args = {
+      $e: smallSession.event,
+      $cache: this.ctx.cache,
+      [iFns.arg]: iFns.fns,
+      [presetPool.presetConstantPoolFnArg]: presetPool.presetConstantPool ?? {},
+      [presetPool.presetFnPoolFnArg]: presetPool.presetFnPool ?? {},
+    };
+
     if (optionInfoMap) {
-      fnArgTexts.push(optionInfoMap.fnArg);
-      fnArgs.push(optionInfoMap.map ?? {});
+      args[optionInfoMap.fnArg] = optionInfoMap.map ?? {};
     }
 
     if (expandData) {
       for (const key in expandData) {
-        fnArgTexts.push("$" + key);
-        fnArgs.push(expandData[key]);
+        args["$" + key] = expandData[key];
       }
     }
-
+    const fnArgTexts = [];
+    const fnArgs = [];
+    for (const key in args) {
+      fnArgTexts.push(key);
+      fnArgs.push(args[key]);
+    }
     return async (code: string) => {
       const fn = AsyncFunction(...fnArgTexts, code);
       return fn.apply(fn, fnArgs);

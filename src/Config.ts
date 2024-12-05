@@ -556,10 +556,11 @@ export const Config: Schema<Config> = Schema.intersect([
                   .collapse()
                   .description("選項配置"),
                 _prompt: Schema.never().description(
-                  "#請求地址 | 請求頭 | 請求資料 | 指令鏈 | EJS 模板 配置項中可使用  \n" +
+                  "#請求地址 | 請求頭 | 請求資料 | 指令鏈 | EJS 模板 | 自定義函式 配置項中可使用  \n" +
                     "**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n" +
                     "**<%=名稱%>** 插入同名的預設常量或引數或選項  \n" +
                     "**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
+                    "**<%=$cache%>** 呼叫 [資料快取服務](https://cache.koishi.chat/zh-CN/) 文檔中的ctx.在此處替換為$ 需要安裝cache服務  \n" +
                     "**<%= %>** 中允許使用 js程式碼 | 內建函式 | 預設常量 | 預設函式 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n" +
                     "#內建函式  \n" +
                     "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +

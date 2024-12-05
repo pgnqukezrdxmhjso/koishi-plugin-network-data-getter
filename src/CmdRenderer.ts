@@ -79,6 +79,7 @@ export default class CmdRenderer implements BeanTypeInterface {
           source.ejsTemplate,
           {
             $e: smallSession.event,
+            $cache:this.ctx.cache,
             data: resData,
             ...iFns.fns,
             ...(presetPool.presetConstantPool ?? {}),

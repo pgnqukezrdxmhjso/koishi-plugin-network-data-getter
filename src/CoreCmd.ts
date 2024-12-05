@@ -4,8 +4,6 @@ import fs from "node:fs";
 
 import { Argv, Command, Context, Fragment, h, HTTP, Session } from "koishi";
 import { Channel, GuildMember } from "@satorijs/protocol";
-// noinspection ES6UnusedImports
-import {} from "koishi-plugin-cron";
 import * as OTPAuth from "otpauth";
 
 import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
