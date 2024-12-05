@@ -251,6 +251,7 @@ ejsTemplate: |-
 
 ### TODO
 
+- 增加指令前置函式(用於操作資料快取服務、阻止指令執行、向後續執行提供資料等)
 - 增加 `渲染模板系列` `Open Graph Protocol` `rss` 渲染型別
 - 渲染模板系列 `svg` `psd` `htmlCode` `htmlUrl`
 - 渲染網路代理
