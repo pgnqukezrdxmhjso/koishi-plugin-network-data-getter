@@ -107,10 +107,10 @@ attribute: 獲取元素屬性, 相當於 getAttribute(value)
 例子如下:
 
 ```html
-<img class="abc" src="https://cdn.xyz/abc1.img" alt=""/>
-<img class="abc" src="https://cdn.xyz/abc2.img" alt=""/>
-<img class="abc" src="https://cdn.xyz/abc3.img" alt=""/>
-<img class="xyz" src="https://cdn.xyz/xyz.img" alt=""/>
+<img class="abc" src="https://cdn.xyz/abc1.img" alt="" />
+<img class="abc" src="https://cdn.xyz/abc2.img" alt="" />
+<img class="abc" src="https://cdn.xyz/abc3.img" alt="" />
+<img class="xyz" src="https://cdn.xyz/xyz.img" alt="" />
 ```
 
 想獲取僅限 class 中包含 `abc` 的圖片連結，則可用:
@@ -251,7 +251,7 @@ ejsTemplate: |-
 
 ### TODO
 
-- 增加指令前置函式(用於操作資料快取服務、阻止指令執行、向後續執行提供資料等)
+- 增加鉤子函式功能(用於操作資料快取服務、阻止指令執行、向後續執行提供資料等)
 - 增加 `渲染模板系列` `Open Graph Protocol` `rss` 渲染型別
 - 渲染模板系列 `svg` `psd` `htmlCode` `htmlUrl`
 - 渲染網路代理
@@ -260,6 +260,10 @@ ejsTemplate: |-
 - 支援處理動態網頁
 - 自動回填預設的配置
 - 線上分享配置頁面
+
+### 0.2.2
+
+- 為支援鉤子函式功能調整程式碼
 
 ### 0.2.1
 

@@ -104,6 +104,7 @@ export default class CmdCommon implements BeanTypeInterface {
       try {
         resMap[i + "_" + item] = await codeRunner("return " + item.replace(/\n/g, "\\n"));
       } catch (e) {
+        this.ctx.logger.error(item);
         this.ctx.logger.error(e);
       }
     }

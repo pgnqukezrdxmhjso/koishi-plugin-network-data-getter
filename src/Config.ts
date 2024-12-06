@@ -357,10 +357,33 @@ export const Config: Schema<Config> = Schema.intersect([
           ])
             .default("text")
             .description("渲染型別"),
-          pickOneRandomly: Schema.boolean()
-            .default(true)
-            .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
         }),
+        Schema.union([
+          ...unionOrObject(
+            "sendType",
+            [
+              {
+                value: "text",
+                required: false,
+              },
+              "image",
+              "audio",
+              "video",
+              "file",
+              "cmdLink",
+            ],
+            () => ({
+              pickOneRandomly: Schema.boolean()
+                .default(true)
+                .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
+            }),
+          ),
+          ...unionOrObject("sendType", ["ejs"], () => ({
+            pickOneRandomly: Schema.boolean()
+              .default(false)
+              .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
+          })),
+        ]),
         Schema.union([
           Schema.object({
             sendType: Schema.const("ejs").required(),
@@ -401,12 +424,11 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.union([
           Schema.object({
             msgSendMode: Schema.const("topic").required(),
-            msgTopic: Schema.string()
-              .description(
-                "推送到的主題，使用.分隔子主題  \n" +
-                  "不填寫時預設使用 net-get.指令名  \n" +
-                  "使用當前指令的 --topic-on 訂閱推送 --topic-off 退訂推送",
-              ),
+            msgTopic: Schema.string().description(
+              "推送到的主題，使用.分隔子主題  \n" +
+                "不填寫時預設使用 net-get.指令名  \n" +
+                "使用當前指令的 --topic-on 訂閱推送 --topic-off 退訂推送",
+            ),
           }),
           Schema.object({} as any),
         ]),

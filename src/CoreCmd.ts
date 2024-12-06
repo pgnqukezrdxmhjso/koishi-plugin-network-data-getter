@@ -8,7 +8,7 @@ import * as OTPAuth from "otpauth";
 
 import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
 import CmdRenderer from "./CmdRenderer";
-import CmdResData from "./CmdResData";
+import CmdResData, { ResData } from "./CmdResData";
 import CmdCommon from "./CmdCommon";
 import CmdReq from "./CmdReq";
 import Arrays from "./utils/Arrays";
@@ -77,7 +77,8 @@ export default class CoreCmd implements BeanTypeInterface {
     presetFnPool: {},
     presetFnPoolFnArg: "{}={}",
   };
-  private allCmd: Set<string>;
+  private allCmdName: Set<string>;
+  private allCommand: { [key in string]: Command };
 
   constructor(beanHelper: BeanHelper) {
     this.ctx = beanHelper.getByName("ctx");
@@ -95,6 +96,7 @@ export default class CoreCmd implements BeanTypeInterface {
     this.initAllCmdName();
     this.initHandleQuoteMessage();
     this.registerCmd();
+    this.registerTask();
   }
 
   private initPresetConstants() {
@@ -147,11 +149,11 @@ export default class CoreCmd implements BeanTypeInterface {
   }
 
   private initAllCmdName() {
-    this.allCmd = new Set();
+    this.allCmdName = new Set();
     this.config.sources?.forEach((source) => {
-      this.allCmd.add(source.command);
+      this.allCmdName.add(source.command);
       source.alias?.forEach((alias) => {
-        this.allCmd.add(alias);
+        this.allCmdName.add(alias);
       });
     });
   }
@@ -173,7 +175,7 @@ export default class CoreCmd implements BeanTypeInterface {
           cmd = cmd.replace(new RegExp("^" + p), "").trim();
         });
         const prefix = cmd.split(/\s/)[0];
-        if (!this.allCmd.has(prefix)) {
+        if (!this.allCmdName.has(prefix)) {
           return;
         }
         elements.push(...session.quote.elements);
@@ -201,6 +203,7 @@ export default class CoreCmd implements BeanTypeInterface {
   }
 
   private registerCmd() {
+    this.allCommand = {};
     this.config.sources.forEach((source) => {
       let def = source.command;
       if (source.expertMode) {
@@ -227,6 +230,7 @@ export default class CoreCmd implements BeanTypeInterface {
         })
         .alias(...source.alias)
         .action(async (argv) => this.runCmd(source, argv));
+      this.allCommand[source.command] = command;
 
       if (source.expertMode) {
         source.expert?.commandOptions?.forEach((option) => {
@@ -247,9 +251,6 @@ export default class CoreCmd implements BeanTypeInterface {
           }
           command.option(option.name, desc.join(" "), config);
         });
-        if (source.expert?.scheduledTask) {
-          this.registerTask(source, command);
-        }
       }
 
       if (source.msgSendMode === "topic") {
@@ -366,49 +367,64 @@ export default class CoreCmd implements BeanTypeInterface {
     return h.parse(fragment);
   }
 
-  private async runCmd(source: CmdSource, argv: Argv) {
+  private async cmdTopic(source: CmdSource, argv: Argv): Promise<string> {
+    if (source.msgSendMode !== "topic" || typeof argv.options["topic"] !== "boolean") {
+      return null;
+    }
+    await this.ctx.messageTopicService.topicSubscribe({
+      platform: argv.session.bot.platform,
+      selfId: argv.session.bot.selfId,
+      channelId: argv.session.channelId,
+      bindingKey: source.msgTopic || "net-get." + source.command,
+      enable: argv.options["topic"],
+    });
+    return (argv.options["topic"] ? "訂閱" : "退訂") + "成功";
+  }
+
+  private async runCmd(source: CmdSource, argv: Argv, smallSession?: SmallSession): Promise<Fragment> {
     this.pluginEventEmitter.emit("cmd-action", argv);
     this.ctx.logger.debug("args: ", argv.args);
     this.ctx.logger.debug("options: ", argv.options);
 
-    if (source.msgSendMode === "topic" && typeof argv.options["topic"] === "boolean") {
-      await this.ctx.messageTopicService.topicSubscribe({
-        platform: argv.session.bot.platform,
-        selfId: argv.session.bot.selfId,
-        channelId: argv.session.channelId,
-        bindingKey: source.msgTopic || "net-get." + source.command,
-        enable: argv.options["topic"],
-      });
-      return (argv.options["topic"] ? "訂閱" : "退訂") + "成功";
+    const topicMsg: string = await this.cmdTopic(source, argv);
+    if (topicMsg) {
+      return topicMsg;
     }
 
-    const session = argv.session;
+    const session: Session = argv.session;
     let msgId: string;
-    if (this.config.gettingTips != source.reverseGettingTips) {
+    if (session?.send && this.config.gettingTips != source.reverseGettingTips) {
       [msgId] = await session.send(`獲取 ${source.command} 中，請稍候...`);
+    }
+
+    if (!smallSession) {
+      smallSession = {
+        platform: session?.platform,
+        event: session?.event,
+        content: session?.content,
+        execute: session?.execute,
+      };
     }
 
     const cmdCtx: CmdCtx = {
       source,
       presetPool: this.presetPool,
-      smallSession: {
-        platform: session.platform,
-        event: session.event,
-        content: session.content,
-        execute: session.execute,
-      },
+      smallSession,
       optionInfoMap: null,
     };
     let fragment: Fragment;
-    let isError = false;
+    let isError: boolean = false;
     try {
       cmdCtx.optionInfoMap = await this.handleOptionInfos(source, argv);
       const res: HTTP.Response = await this.cmdReq.cmdReq(cmdCtx);
-      const resData = await this.cmdResData.cmdResData(cmdCtx, res);
+      const resData: ResData = await this.cmdResData.cmdResData(cmdCtx, res);
       fragment = await this.cmdRenderer.rendered(cmdCtx, resData);
     } catch (e) {
       isError = true;
       fragment = await this.sendHttpError(cmdCtx, e);
+      if (!session?.send) {
+        throw new Error(fragment + "");
+      }
     }
 
     if (!fragment) {
@@ -424,83 +440,73 @@ export default class CoreCmd implements BeanTypeInterface {
       });
       fragment = "訊息推送成功";
     }
-
-    const msgIds = await session.send(fragment);
+    if (!session?.send) {
+      return fragment;
+    }
+    const msgIds: string[] = await session.send(fragment);
     if (source.recall > 0) {
       this.ctx.setTimeout(
-        () => msgIds.forEach((mId) => session.bot.deleteMessage(session.channelId, mId)),
+        () => msgIds.forEach((mId: string) => session.bot.deleteMessage(session.channelId, mId)),
         source.recall * 60000,
       );
     }
   }
 
-  private registerTask(source: CmdSource, command: Command) {
-    const expert = source.expert;
-    if (Strings.isBlank(expert.cron) || Strings.isBlank(expert.scheduledTaskContent)) {
-      return;
-    }
-    const refuseText = source.command + " 指令, 註冊定時執行失敗: ";
-    if (!this.ctx.cron) {
-      this.ctx.logger.info(refuseText + "cron 服務未載入");
-      return;
-    }
-    if (!this.ctx.messageTopicService) {
-      this.ctx.logger.info(refuseText + "messageTopicService 服務未載入");
-      return;
-    }
-    if (source.msgSendMode !== "topic") {
-      this.ctx.logger.info(refuseText + "訊息傳送模式 不是 主題推送");
-      return;
-    }
-    if (source.sendType === "cmdLink") {
-      this.ctx.logger.info(refuseText + "渲染型別 不能是 指令鏈");
-      return;
-    }
+  private registerTask() {
+    const registerList: CmdSource[] = this.config.sources.filter((source) => {
+      const expert = source.expert;
+      if (!expert?.scheduledTask || Strings.isBlank(expert.cron) || Strings.isBlank(expert.scheduledTaskContent)) {
+        return false;
+      }
+      const refuseText = source.command + " 指令, 註冊定時執行失敗: ";
+      if (source.msgSendMode !== "topic") {
+        this.ctx.logger.info(refuseText + "訊息傳送模式 不是 主題推送");
+        return false;
+      }
+      if (source.sendType === "cmdLink") {
+        this.ctx.logger.info(refuseText + "渲染型別 不能是 指令鏈");
+        return false;
+      }
 
-    const argv = command.parse(expert.scheduledTaskContent);
-    if (Strings.isNotBlank(argv.error)) {
-      this.ctx.logger.info(refuseText + "執行的內容解析出現錯誤 " + argv.error);
-      return;
-    }
-    this.ctx.cron(expert.cron, async () => {
-      await this.runTask(source, command);
+      const argv = this.allCommand[source.command].parse(expert.scheduledTaskContent);
+      if (Strings.isNotBlank(argv.error)) {
+        this.ctx.logger.info(refuseText + "執行的內容解析出現錯誤 " + argv.error);
+        return false;
+      }
+      return true;
     });
+
+    if (registerList.length > 0) {
+      this.ctx.inject(["cron", "messageTopicService"], () => {
+        registerList.forEach((source: CmdSource) => {
+          this.ctx.logger.info("註冊定時執行: " + source.command);
+          this.ctx.cron(source.expert.cron, async () => {
+            await this.runTask(source, this.allCommand[source.command]);
+          });
+        });
+      });
+    }
   }
 
   private async runTask(source: CmdSource, command: Command) {
     const argv = command.parse(source.expert.scheduledTaskContent);
-    this.ctx.logger.debug("args: ", argv.args);
-    this.ctx.logger.debug("options: ", argv.options);
-
-    const cmdCtx: CmdCtx = {
-      source,
-      presetPool: this.presetPool,
-      smallSession: {
-        platform: "network-data-getter",
-        event: {
-          id: Date.now(),
-          type: "runTask",
-          selfId: "network-data-getter",
-          platform: "koishi",
-          timestamp: Date.now(),
-          argv: {
-            name: argv.name,
-            arguments: argv.args,
-            options: argv.options,
-          },
+    const fragment = await this.runCmd(source, argv, {
+      platform: "network-data-getter",
+      event: {
+        id: Date.now(),
+        type: "runTask",
+        selfId: "network-data-getter",
+        platform: "koishi",
+        timestamp: Date.now(),
+        argv: {
+          name: argv.name,
+          arguments: argv.args,
+          options: argv.options,
         },
-        content: argv.source,
-        execute: null,
       },
-      optionInfoMap: null,
-    };
-    cmdCtx.optionInfoMap = await this.handleOptionInfos(source, argv);
-    const res: HTTP.Response = await this.cmdReq.cmdReq(cmdCtx);
-    const resData = await this.cmdResData.cmdResData(cmdCtx, res);
-    const fragment: Fragment = await this.cmdRenderer.rendered(cmdCtx, resData);
-    await this.ctx.messageTopicService.sendMessageToTopic(source.msgTopic || "net-get." + source.command, fragment, {
-      retractTime: source.recall > 0 ? source.recall * 60000 : undefined,
+      content: argv.source,
+      execute: null,
     });
-    this.ctx.logger.info(source.command + " 訊息推送成功");
+    this.ctx.logger.info(source.command + " " + fragment);
   }
 }
