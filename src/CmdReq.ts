@@ -143,11 +143,16 @@ export default class CmdReq implements BeanTypeInterface {
 
   async cmdReq(cmdCtx: CmdCtx) {
     const requestConfig: HTTP.RequestConfig = {};
+    await this.cmdCommon.runHookFns(cmdCtx, "reqDataBefore");
     const url = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.sourceUrl);
     await this.handleReqExpert(cmdCtx, requestConfig);
     const httpClient = this.cmdHttp.getCmdHttpClient(cmdCtx.source);
-    this.reqLog(cmdCtx, url, requestConfig);
 
+    await this.cmdCommon.runHookFns(cmdCtx, "reqBefore", {
+      url,
+      requestConfig,
+    });
+    this.reqLog(cmdCtx, url, requestConfig);
     const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
 
     this.debugInfo(() => `cmdNetRes; ${cmdCtx.smallSession.content}\n${JSON.stringify(res, null, 1)}`);

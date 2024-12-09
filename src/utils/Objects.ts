@@ -31,6 +31,45 @@ const Objects = {
       }
     }
   },
+  async clone<T>(obj: T): Promise<T> {
+    const newObj = (Array.isArray(obj) ? [] : {}) as T;
+    await Objects.thoroughForEach(obj, async (value: any, key: string, obj: any, keys: string[]) => {
+      let tObj: any = newObj;
+      keys.forEach((key) => {
+        if (!tObj[key]) {
+          tObj[key] = Array.isArray(obj) ? [] : {};
+        }
+        tObj = tObj[key];
+      });
+      tObj[key] = value;
+    });
+    return newObj;
+  },
+  async filter<T>(
+    obj: T,
+    fn: (value: any, key: string, obj: any, keys: string[], root: any) => Promise<boolean>,
+    keys: string[] = [],
+    root?: any,
+  ): Promise<T> {
+    if (!root) {
+      root = await Objects.clone(obj);
+      obj = root;
+    }
+    for (const key in obj) {
+      const value = obj[key];
+      if (value instanceof Object) {
+        obj[key] = await Objects.filter(value, fn, [...keys, key], root);
+      } else {
+        if (!(await fn(value, key, obj, keys, root))) {
+          delete obj[key];
+        }
+      }
+    }
+    if (Array.isArray(obj)) {
+      obj = Object.values(obj) as T;
+    }
+    return obj;
+  },
   flatten(data: any, rootElements: any[] = []): any[] {
     if (data === undefined || data === null) {
       return;

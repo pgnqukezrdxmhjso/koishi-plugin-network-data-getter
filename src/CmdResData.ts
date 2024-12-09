@@ -7,7 +7,7 @@ import Strings from "./utils/Strings";
 import CmdCommon from "./CmdCommon";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
-export type ResData = { [k in any]: any } | [];
+export type ResData = Record<any, any> | any[];
 
 type BaseProcessorMap = {
   [key in BaseProcessorType]: (res: HTTP.Response, cmdCtx: CmdCtx) => ResData;
@@ -83,11 +83,14 @@ export default class CmdResData implements BeanTypeInterface {
   };
 
   async cmdResData(cmdCtx: CmdCtx, res: HTTP.Response): Promise<ResData> {
-    const parser = this.baseProcessorMap[cmdCtx.source.dataType];
-    if (!parser) {
+    const processor = this.baseProcessorMap[cmdCtx.source.dataType];
+    if (!processor) {
       throw new Error(`未知的響應資料處理器: ${cmdCtx.source.dataType}`);
     }
-    const resData = parser(res, cmdCtx);
+    await this.cmdCommon.runHookFns(cmdCtx, "resDataBefore", {
+      response: res,
+    });
+    const resData = processor(res, cmdCtx);
     if (resData === undefined || resData === null) {
       throw "沒有獲取到資料";
     }

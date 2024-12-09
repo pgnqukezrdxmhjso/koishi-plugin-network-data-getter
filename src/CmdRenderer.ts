@@ -11,7 +11,10 @@ import Objects from "./utils/Objects";
 import Arrays from "./utils/Arrays";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
-type Renderer = (cmdCtx: CmdCtx, resData: ResData) => Promise<Fragment>;
+type Renderer = {
+  r: (cmdCtx: CmdCtx, resData: ResData) => Promise<Fragment>;
+  verify?: (val: any) => Promise<boolean>;
+};
 
 export default class CmdRenderer implements BeanTypeInterface {
   private ctx: Context;
@@ -26,24 +29,23 @@ export default class CmdRenderer implements BeanTypeInterface {
     this.cmdHttp = beanHelper.instance(CmdHttp);
   }
 
-  private buildMedia(type: string, base64Prefix: string) {
+  private buildMedia(type: string) {
     return async (cmdCtx: CmdCtx, resData: ResData) => {
-      const { source } = cmdCtx;
-      let dataList = Objects.flatten(resData).filter((s) => s.startsWith("http") || s.startsWith(base64Prefix));
+      const dataList = Objects.flatten(resData);
       if (Arrays.isEmpty(dataList)) {
         throw "沒有符合條件的結果";
       }
-      if (source.pickOneRandomly) {
-        dataList = [Random.pick(dataList)];
-      }
       const elements = [];
       for (const item of dataList) {
-        if ((source.expertMode && !source.expert.renderedMediaUrlToBase64) || !item?.startsWith?.("http")) {
+        if (
+          (cmdCtx.source.expertMode && !cmdCtx.source.expert.renderedMediaUrlToBase64) ||
+          !item?.startsWith?.("http")
+        ) {
           elements.push(item);
         } else {
           elements.push(
             await this.cmdHttp.urlToBase64(cmdCtx, item, {
-              headers: source.expertMode ? source.expert.rendererRequestHeaders : undefined,
+              headers: cmdCtx.source.expertMode ? cmdCtx.source.expert.rendererRequestHeaders : undefined,
             }),
           );
         }
@@ -54,62 +56,74 @@ export default class CmdRenderer implements BeanTypeInterface {
   }
 
   rendererMap: { [key in RendererType]: Renderer } = {
-    text: async ({ source }, resData) => {
-      let dataList = Objects.flatten(resData);
-      if (source.pickOneRandomly) {
-        dataList = [Random.pick(dataList)];
-      }
-      return h.parse(dataList.map((text: any) => `<p>${text}</p>`).join(""));
-    },
-    image: this.buildMedia("img", "data:image/"),
-    audio: this.buildMedia("audio", "data:audio/"),
-    video: this.buildMedia("video", "data:video/"),
-    file: this.buildMedia("file", "data:"),
-    ejs: async (cmdCtx, resData) => {
-      const { source, presetPool, smallSession, optionInfoMap } = cmdCtx;
-      try {
-        if (source.pickOneRandomly) {
-          resData = [Random.pick(Objects.flatten(resData))];
+    text: {
+      r: async (_, resData: ResData) => {
+        if (!Array.isArray(resData)) {
+          resData = [JSON.stringify(resData)];
         }
-        if (!source.ejsTemplate) {
-          return JSON.stringify(resData);
-        }
-        const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
-        let code = await render(
-          source.ejsTemplate,
-          {
-            $e: smallSession.event,
-            $cache:this.ctx.cache,
-            data: resData,
-            ...iFns.fns,
-            ...(presetPool.presetConstantPool ?? {}),
-            ...(presetPool.presetFnPool ?? {}),
-            ...(optionInfoMap.map ?? {}),
-            $data: resData,
-          },
-          {
-            async: true,
-            rmWhitespace: true,
-          },
-        );
-        code = code.replace(/\n\n/g, "\n");
-        return h.parse(code);
-      } catch (err) {
-        this.ctx.logger.error("Error while parsing ejs data and json:");
-        this.ctx.logger.error(err);
-        throw err;
-      }
+        return h.parse(resData.map((text: any) => `<p>${text}</p>`).join(""));
+      },
     },
-    cmdLink: async (cmdCtx, resData) => {
-      if (Strings.isBlank(cmdCtx.source.cmdLink)) {
+    image: {
+      r: this.buildMedia("img"),
+      verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:image/"),
+    },
+    audio: {
+      r: this.buildMedia("audio"),
+      verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:audio/"),
+    },
+    video: {
+      r: this.buildMedia("video"),
+      verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:video/"),
+    },
+    file: {
+      r: this.buildMedia("file"),
+      verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:"),
+    },
+    ejs: {
+      r: async (cmdCtx, resData) => {
+        const { source, presetPool, smallSession, optionInfoMap } = cmdCtx;
+        try {
+          if (!source.ejsTemplate) {
+            return JSON.stringify(resData);
+          }
+          const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
+          let code = await render(
+            source.ejsTemplate,
+            {
+              $e: smallSession.event,
+              $cache: this.ctx.cache,
+              $tmpPool: cmdCtx.tmpPool,
+              data: resData,
+              ...iFns.fns,
+              ...(presetPool.presetConstantPool ?? {}),
+              ...(presetPool.presetFnPool ?? {}),
+              ...(optionInfoMap.map ?? {}),
+              $data: resData,
+            },
+            {
+              async: true,
+              rmWhitespace: true,
+            },
+          );
+          code = code.replace(/\n\n/g, "\n");
+          return h.parse(code);
+        } catch (err) {
+          this.ctx.logger.error("Error while parsing ejs data and json:");
+          this.ctx.logger.error(err);
+          throw err;
+        }
+      },
+    },
+    cmdLink: {
+      r: async (cmdCtx, resData) => {
+        if (Strings.isBlank(cmdCtx.source.cmdLink)) {
+          return null;
+        }
+        const cmdLink = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.cmdLink, resData);
+        await cmdCtx.smallSession.execute(cmdLink);
         return null;
-      }
-      if (cmdCtx.source.pickOneRandomly) {
-        resData = [Random.pick(Objects.flatten(resData))];
-      }
-      const cmdLink = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.cmdLink, resData);
-      await cmdCtx.smallSession.execute(cmdLink);
-      return null;
+      },
     },
   };
 
@@ -149,11 +163,22 @@ export default class CmdRenderer implements BeanTypeInterface {
   }
 
   async rendered(cmdCtx: CmdCtx, resData: ResData) {
-    const { source } = cmdCtx;
-    const renderer = this.rendererMap[source.sendType];
+    const renderer = this.rendererMap[cmdCtx.source.sendType];
     if (!renderer) {
-      throw `不支援的渲染型別: ${source.sendType}`;
+      throw `不支援的渲染型別: ${cmdCtx.source.sendType}`;
     }
-    return this.handleMsgPacking(cmdCtx.source, await renderer(cmdCtx, resData));
+
+    if (renderer.verify) {
+      resData = await Objects.filter(resData, async (value) => renderer.verify(value));
+    }
+
+    if (cmdCtx.source.pickOneRandomly) {
+      resData = [Random.pick(Objects.flatten(resData))];
+    }
+
+    await this.cmdCommon.runHookFns(cmdCtx, "renderedBefore", {
+      resData,
+    });
+    return this.handleMsgPacking(cmdCtx.source, await renderer.r(cmdCtx, resData));
   }
 }

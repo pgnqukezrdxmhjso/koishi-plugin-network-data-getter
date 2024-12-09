@@ -14,6 +14,7 @@ export type MessagePackingType = "none" | "multiple" | "all";
 export type HttpErrorShowToMsg = "hide" | "show";
 export type SourceHttpErrorShowToMsg = "inherit" | HttpErrorShowToMsg | "function";
 export type MsgSendMode = "direct" | "topic";
+export type HookFnsType = "reqDataBefore" | "reqBefore" | "resDataBefore" | "renderedBefore";
 
 export interface CommandArg {
   name: string;
@@ -34,6 +35,11 @@ export interface CommandOption {
   overwriteKey?: string;
 }
 
+export interface HookFn {
+  type: HookFnsType;
+  fn: string;
+}
+
 export interface SourceExpert {
   scheduledTask: boolean;
   cron?: string;
@@ -49,6 +55,7 @@ export interface SourceExpert {
   proxyAgent?: string;
   renderedMediaUrlToBase64: boolean;
   rendererRequestHeaders?: Dict<string, string>;
+  hookFns: HookFn[];
 }
 
 export interface CmdSource {
@@ -339,7 +346,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   "入參使用方法見專家模式中的 **_prompt**  \n" +
                   "本配置項中不需要加 **<%= %>**  \n" +
                   "#可額外使用  \n" +
-                  "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n",
+                  "**$response** [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n",
               ),
           }),
           Schema.object({} as any),
@@ -454,8 +461,8 @@ export const Config: Schema<Config> = Schema.intersect([
                   "入參使用方法見專家模式中的 **_prompt**  \n" +
                   "本配置項中不需要加 **<%= %>**  \n" +
                   "#可額外使用  \n" +
-                  "$response [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
-                  "$error [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)",
+                  "**$response** [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
+                  "**$error** [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)",
               ),
           }),
           Schema.object({} as any),
@@ -582,6 +589,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     "**<%=$數字%>** 插入對應位置的引數(引數是從0開始的)  \n" +
                     "**<%=名稱%>** 插入同名的預設常量或引數或選項  \n" +
                     "**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
+                    "**<%=$tmpPool%>** 每個請求獨立的臨時儲存，可以自由修改其中的變數  \n" +
                     "**<%=$cache%>** 呼叫 [資料快取服務](https://cache.koishi.chat/zh-CN/) 文檔中的ctx.在此處替換為$ 需要安裝cache服務  \n" +
                     "**<%= %>** 中允許使用 js程式碼 | 內建函式 | 預設常量 | 預設函式 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n" +
                     "#內建函式  \n" +
@@ -628,6 +636,57 @@ export const Config: Schema<Config> = Schema.intersect([
                 }),
                 Schema.object({}),
               ]),
+              Schema.object({
+                hookFns: Schema.array(
+                  Schema.intersect([
+                    Schema.object({
+                      type: Schema.union([
+                        Schema.const("reqDataBefore").description("請求資料處理前"),
+                        Schema.const("reqBefore").description("傳送請求前"),
+                        Schema.const("resDataBefore").description("響應資料處理前"),
+                        Schema.const("renderedBefore").description("渲染前"),
+                      ])
+                        .default("reqDataBefore")
+                        .description("型別"),
+                      _explain: Schema.never().description(
+                        "入參使用方法見專家模式中的 **_prompt**  \n" +
+                          "本配置項中不需要加 **<%= %>**  \n" +
+                          "**return false** 阻斷執行  \n" +
+                          '**return "字串"** 阻斷執行並返回訊息  \n',
+                      ),
+                    }),
+                    Schema.union([
+                      Schema.object({
+                        type: Schema.const("reqBefore").required(),
+                        _explain: Schema.never().description(
+                          "#可額外使用  \n" +
+                            "**$url**  \n" +
+                            "**$requestConfig** [HTTP.RequestConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)",
+                        ),
+                      }),
+                      Schema.object({
+                        type: Schema.const("resDataBefore").required(),
+                        _explain: Schema.never().description(
+                          "#可額外使用  \n" +
+                            "**$response** [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)",
+                        ),
+                      }),
+                      Schema.object({
+                        type: Schema.const("renderedBefore").required(),
+                        _explain: Schema.never().description("#可額外使用  \n" + "**$resData** [] | {}"),
+                      }),
+                      Schema.object({}),
+                    ]),
+                    Schema.object({
+                      fn: Schema.string()
+                        .role("textarea", { rows: [3, 9] })
+                        .required(),
+                    }),
+                  ]),
+                )
+                  .collapse()
+                  .description("鉤子函式"),
+              }),
             ]),
           }),
           Schema.object({} as any),

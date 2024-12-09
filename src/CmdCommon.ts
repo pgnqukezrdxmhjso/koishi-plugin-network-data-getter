@@ -3,9 +3,21 @@ import { Context, HTTP } from "koishi";
 import CmdHttp from "./CmdHttp";
 import Objects from "./utils/Objects";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
-import { Config } from "./Config";
+import { Config, HookFn, HookFnsType } from "./Config";
+import Strings from "./utils/Strings";
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
+
+export type BizErrorType = "hookBlock" | "hookBlock-msg";
+
+export class BizError extends Error {
+  type: BizErrorType;
+
+  constructor(message?: string, type?: BizErrorType) {
+    super(message);
+    this.type = type;
+  }
+}
 
 export default class CmdCommon implements BeanTypeInterface {
   private ctx: Context;
@@ -54,19 +66,19 @@ export default class CmdCommon implements BeanTypeInterface {
     };
   }
 
-  generateCodeRunner(cmdCtx: CmdCtx, expandData?: { [k in string]: any }) {
-    const { presetPool, smallSession, optionInfoMap } = cmdCtx;
+  generateCodeRunner(cmdCtx: CmdCtx, expandData?: Record<string, any>) {
     const iFns = this.buildInternalFns(cmdCtx);
     const args = {
-      $e: smallSession.event,
+      $e: cmdCtx.smallSession.event,
       $cache: this.ctx.cache,
+      $tmpPool: cmdCtx.tmpPool,
       [iFns.arg]: iFns.fns,
-      [presetPool.presetConstantPoolFnArg]: presetPool.presetConstantPool ?? {},
-      [presetPool.presetFnPoolFnArg]: presetPool.presetFnPool ?? {},
+      [cmdCtx.presetPool.presetConstantPoolFnArg]: cmdCtx.presetPool.presetConstantPool ?? {},
+      [cmdCtx.presetPool.presetFnPoolFnArg]: cmdCtx.presetPool.presetFnPool ?? {},
     };
 
-    if (optionInfoMap) {
-      args[optionInfoMap.fnArg] = optionInfoMap.map ?? {};
+    if (cmdCtx.optionInfoMap) {
+      args[cmdCtx.optionInfoMap.fnArg] = cmdCtx.optionInfoMap.map ?? {};
     }
 
     if (expandData) {
@@ -143,5 +155,25 @@ export default class CmdCommon implements BeanTypeInterface {
       }
 
     return obj;
+  }
+
+  async runHookFns(cmdCtx: CmdCtx, type: HookFnsType, expandData?: Record<string, any>) {
+    if (!cmdCtx.source.expertMode) {
+      return;
+    }
+    const hookFns: HookFn[] = cmdCtx.source.expert?.hookFns?.filter(
+      (hookFn) => hookFn.type === type && Strings.isNotBlank(hookFn.fn),
+    );
+    const codeRunner = this.generateCodeRunner(cmdCtx, expandData);
+    for (const hookFn of hookFns) {
+      const res = await codeRunner(hookFn.fn);
+      if (res === false) {
+        throw new BizError(`hook ${type} block`, "hookBlock");
+      }
+      if (typeof res === "string") {
+        throw new BizError(res, "hookBlock-msg");
+      }
+    }
+    return;
   }
 }

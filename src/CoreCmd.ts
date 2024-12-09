@@ -9,7 +9,7 @@ import * as OTPAuth from "otpauth";
 import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
 import CmdRenderer from "./CmdRenderer";
 import CmdResData, { ResData } from "./CmdResData";
-import CmdCommon from "./CmdCommon";
+import CmdCommon, { BizError } from "./CmdCommon";
 import CmdReq from "./CmdReq";
 import Arrays from "./utils/Arrays";
 import Strings from "./utils/Strings";
@@ -59,6 +59,7 @@ export interface CmdCtx {
   presetPool: PresetPool;
   optionInfoMap: OptionInfoMap;
   smallSession: SmallSession;
+  tmpPool: Record<string, any>;
 }
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
@@ -402,7 +403,7 @@ export default class CoreCmd implements BeanTypeInterface {
         platform: session?.platform,
         event: session?.event,
         content: session?.content,
-        execute: session?.execute,
+        execute: session?.execute.bind(session),
       };
     }
 
@@ -411,6 +412,7 @@ export default class CoreCmd implements BeanTypeInterface {
       presetPool: this.presetPool,
       smallSession,
       optionInfoMap: null,
+      tmpPool: {},
     };
     let fragment: Fragment;
     let isError: boolean = false;
@@ -420,6 +422,14 @@ export default class CoreCmd implements BeanTypeInterface {
       const resData: ResData = await this.cmdResData.cmdResData(cmdCtx, res);
       fragment = await this.cmdRenderer.rendered(cmdCtx, resData);
     } catch (e) {
+      if (e instanceof BizError) {
+        if (e.type === "hookBlock") {
+          this.ctx.logger.info(e.message);
+          return;
+        } else if (e.type === "hookBlock-msg") {
+          return e.message;
+        }
+      }
       isError = true;
       fragment = await this.sendHttpError(cmdCtx, e);
       if (!session?.send) {
