@@ -120,8 +120,13 @@ export default class CmdRenderer implements BeanTypeInterface {
         if (Strings.isBlank(cmdCtx.source.cmdLink)) {
           return null;
         }
-        const cmdLink = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.cmdLink, resData);
-        await cmdCtx.smallSession.execute(cmdLink);
+        let cmdLinks: string[] = [await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.cmdLink, resData)];
+        if (cmdCtx.source.multipleCmd) {
+          cmdLinks = cmdLinks[0].split(/[\r\n]/g);
+        }
+        for (const cmdLink of cmdLinks) {
+          await cmdCtx.smallSession.execute(cmdLink);
+        }
         return null;
       },
     },

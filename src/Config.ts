@@ -77,6 +77,7 @@ export interface CmdSource {
   sendType: RendererType;
   pickOneRandomly: boolean;
   ejsTemplate?: string;
+  multipleCmd?: boolean;
   cmdLink?: string;
 
   msgSendMode: MsgSendMode;
@@ -406,6 +407,9 @@ export const Config: Schema<Config> = Schema.intersect([
           }),
           Schema.object({
             sendType: Schema.const("cmdLink").required(),
+            multipleCmd: Schema.boolean()
+              .default(false)
+              .description("開啟後支援每行寫一條指令，但是失去一條指令內換行的功能"),
             cmdLink: Schema.string()
               .role("textarea", { rows: [2, 9] })
               .required()
