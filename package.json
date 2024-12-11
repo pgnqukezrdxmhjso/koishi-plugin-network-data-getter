@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "透過配置指令，請求url併傳送聊天訊息",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
@@ -56,6 +56,7 @@
     "globals": "^15.12.0",
     "koishi-plugin-cron": "^3.1.0",
     "koishi-plugin-message-topic-service": "^0.0.12",
+    "koishi-plugin-puppeteer": "^3.9.0",
     "koishi-plugin-umami-statistics-service": "^0.0.7",
     "prettier": "^3.4.1",
     "typescript-eslint": "^8.16.1-alpha.3"
@@ -67,9 +68,10 @@
         "umamiStatisticsService"
       ],
       "optional": [
-        "messageTopicService",
         "cron",
-        "cache"
+        "cache",
+        "puppeteer",
+        "messageTopicService"
       ]
     }
   }

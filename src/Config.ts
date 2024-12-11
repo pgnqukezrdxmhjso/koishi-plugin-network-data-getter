@@ -1,11 +1,10 @@
 import { Dict, HTTP, Schema } from "koishi";
-
 import PresetFns from "./PresetFns";
 import fs from "node:fs";
 import path from "node:path";
 
-export type BaseProcessorType = "json" | "txt" | "html" | "plain" | "resource" | "function";
-export type RendererType = "text" | "image" | "audio" | "video" | "file" | "ejs" | "cmdLink";
+export type BaseProcessorType = "json" | "plain" | "txt" | "html" | "resource" | "function";
+export type RendererType = "text" | "image" | "audio" | "video" | "file" | "ejs" | "cmdLink" | "puppeteer";
 export type RequestDataType = "empty" | "form-data" | "x-www-form-urlencoded" | "raw";
 export type ProxyType = "NONE" | "GLOBAL" | "MANUAL";
 export type OptionValue = boolean | string | number;
@@ -58,6 +57,21 @@ export interface SourceExpert {
   hookFns: HookFn[];
 }
 
+export type RendererPuppeteerRendererType = "html" | "url" | "ejs";
+export type RendererPuppeteerWaitType = "selector" | "function" | "sleep";
+
+export interface RendererPuppeteer {
+  rendererType: RendererPuppeteerRendererType;
+  ejsTemplate?: string;
+  waitType: RendererPuppeteerWaitType;
+  waitSelector?: string;
+  waitFn?: string;
+  waitTimeout?: number;
+  waitTime?: number;
+  screenshotSelector: string;
+  screenshotOmitBackground: boolean;
+}
+
 export interface CmdSource {
   command: string;
   alias: string[];
@@ -79,6 +93,7 @@ export interface CmdSource {
   ejsTemplate?: string;
   multipleCmd?: boolean;
   cmdLink?: string;
+  rendererPuppeteer?: RendererPuppeteer;
 
   msgSendMode: MsgSendMode;
   msgTopic?: string;
@@ -177,6 +192,15 @@ function proxyConfigSchema() {
 
 const CommonSchema = {
   inherit: Schema.const("inherit").description("繼承"),
+  ejsTemplate: Schema.string()
+    .role("textarea", { rows: [3, 9] })
+    .required()
+    .description(
+      "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)\n" +
+        "入參使用方法見專家模式中的 **_prompt**  \n" +
+        "#可額外使用  \n" +
+        "**<%=$data%>** 響應資料處理器返回的值",
+    ),
 };
 
 export const Config: Schema<Config> = Schema.intersect([
@@ -308,18 +332,18 @@ export const Config: Schema<Config> = Schema.intersect([
           sourceUrl: Schema.string()
             .role("textarea", { rows: [1, 9] })
             .required()
-            .description("請求地址"),
+            .description("請求地址  \n可以不填寫，將不會發起請求。用於結合響應資料處理器-自定義函式使用"),
           requestMethod: Schema.union(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "PURGE", "LINK", "UNLINK"])
             .default("GET")
             .description("請求方法"),
         }),
         Schema.object({
           dataType: Schema.union([
-            Schema.const("json").description("JSON"),
-            Schema.const("txt").description("多行文字"),
-            Schema.const("html").description("HTML 文字"),
+            Schema.const("json").description("JSON 選擇器"),
+            Schema.const("plain").description("JSON 原文"),
+            Schema.const("txt").description("文字"),
+            Schema.const("html").description("HTML CSS選擇器"),
             Schema.const("resource").description("資源 (圖片/影片/音訊等)"),
-            Schema.const("plain").description("JSONRaw"),
             Schema.const("function").description("自定義函式"),
           ])
             .default("txt")
@@ -362,6 +386,7 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.const("file").description("檔案"),
             Schema.const("ejs").description("EJS 模板"),
             Schema.const("cmdLink").description("指令鏈"),
+            Schema.const("puppeteer").description("html截圖"),
           ])
             .default("text")
             .description("渲染型別"),
@@ -386,7 +411,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
             }),
           ),
-          ...unionOrObject("sendType", ["ejs"], () => ({
+          ...unionOrObject("sendType", ["ejs", "puppeteer"], () => ({
             pickOneRandomly: Schema.boolean()
               .default(false)
               .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
@@ -395,15 +420,7 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.union([
           Schema.object({
             sendType: Schema.const("ejs").required(),
-            ejsTemplate: Schema.string()
-              .role("textarea", { rows: [3, 9] })
-              .required()
-              .description(
-                "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)\n" +
-                  "入參使用方法見專家模式中的 **_prompt**  \n" +
-                  "#可額外使用  \n" +
-                  "**<%=$data%>** 響應資料處理器返回的值",
-              ),
+            ejsTemplate: CommonSchema.ejsTemplate,
           }),
           Schema.object({
             sendType: Schema.const("cmdLink").required(),
@@ -420,6 +437,64 @@ export const Config: Schema<Config> = Schema.intersect([
                   "#可額外使用  \n" +
                   "**<%=$data%>** 響應資料處理器返回的值",
               ),
+          }),
+          Schema.object({
+            sendType: Schema.const("puppeteer").required(),
+            rendererPuppeteer: Schema.intersect([
+              Schema.object({
+                rendererType: Schema.union([
+                  Schema.const("html").description("html程式碼"),
+                  Schema.const("url").description("網站地址"),
+                  Schema.const("ejs").description("EJS 模板"),
+                ])
+                  .default("html")
+                  .description("渲染型別"),
+              }),
+              Schema.union([
+                Schema.object({
+                  rendererType: Schema.const("ejs").required(),
+                  ejsTemplate: CommonSchema.ejsTemplate,
+                }),
+                Schema.object({}),
+              ]),
+              Schema.object({
+                waitType: Schema.union([
+                  Schema.const("selector").description("css選擇器"),
+                  Schema.const("function").description("自定義函式"),
+                  Schema.const("sleep").description("定時"),
+                ])
+                  .default("selector")
+                  .description("等待載入型別"),
+              }),
+              Schema.union([
+                Schema.object({
+                  waitType: Schema.const("selector"),
+                  waitSelector: Schema.string()
+                    .default("body")
+                    .description("等待目標元素 [CSS 選擇器](https://pptr.dev/guides/page-interactions#selectors)"),
+                  waitTimeout: Schema.number().default(30_000).description("超時時間"),
+                }),
+                Schema.object({
+                  waitType: Schema.const("function").required(),
+                  waitFn: Schema.string()
+                    .role("textarea", { rows: [3, 9] })
+                    .required()
+                    .description("在頁面中執行的函式，**return true**後結束等待, 可以使用await"),
+                  waitTimeout: Schema.number().default(30_000).description("超時時間"),
+                }),
+                Schema.object({
+                  waitType: Schema.const("sleep").required(),
+                  waitTime: Schema.number().default(3_000).description("等待時間"),
+                }),
+                Schema.object({}),
+              ]),
+              Schema.object({
+                screenshotSelector: Schema.string()
+                  .default("body")
+                  .description("截圖目標元素 [CSS 選擇器](https://pptr.dev/guides/page-interactions#selectors)"),
+                screenshotOmitBackground: Schema.boolean().default(false).description("透明背景"),
+              }),
+            ]),
           }),
           Schema.object({} as any),
         ]),

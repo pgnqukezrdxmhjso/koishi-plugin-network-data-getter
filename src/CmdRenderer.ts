@@ -55,6 +55,38 @@ export default class CmdRenderer implements BeanTypeInterface {
     };
   }
 
+  private async ejs(cmdCtx: CmdCtx, resData: ResData, ejsTemplate: string) {
+    try {
+      if (!ejsTemplate) {
+        return JSON.stringify(resData);
+      }
+      const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
+      const code = await render(
+        ejsTemplate,
+        {
+          $e: cmdCtx.smallSession.event,
+          $cache: this.ctx.cache,
+          $tmpPool: cmdCtx.tmpPool,
+          data: resData,
+          ...iFns.fns,
+          ...(cmdCtx.presetPool.presetConstantPool ?? {}),
+          ...(cmdCtx.presetPool.presetFnPool ?? {}),
+          ...(cmdCtx.optionInfoMap.map ?? {}),
+          $data: resData,
+        },
+        {
+          async: true,
+          rmWhitespace: true,
+        },
+      );
+      return code.replace(/\n\n/g, "\n");
+    } catch (err) {
+      this.ctx.logger.error("Error while parsing ejs data and json:");
+      this.ctx.logger.error(err);
+      throw err;
+    }
+  }
+
   rendererMap: { [key in RendererType]: Renderer } = {
     text: {
       r: async (_, resData: ResData) => {
@@ -82,37 +114,8 @@ export default class CmdRenderer implements BeanTypeInterface {
     },
     ejs: {
       r: async (cmdCtx, resData) => {
-        const { source, presetPool, smallSession, optionInfoMap } = cmdCtx;
-        try {
-          if (!source.ejsTemplate) {
-            return JSON.stringify(resData);
-          }
-          const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
-          let code = await render(
-            source.ejsTemplate,
-            {
-              $e: smallSession.event,
-              $cache: this.ctx.cache,
-              $tmpPool: cmdCtx.tmpPool,
-              data: resData,
-              ...iFns.fns,
-              ...(presetPool.presetConstantPool ?? {}),
-              ...(presetPool.presetFnPool ?? {}),
-              ...(optionInfoMap.map ?? {}),
-              $data: resData,
-            },
-            {
-              async: true,
-              rmWhitespace: true,
-            },
-          );
-          code = code.replace(/\n\n/g, "\n");
-          return h.parse(code);
-        } catch (err) {
-          this.ctx.logger.error("Error while parsing ejs data and json:");
-          this.ctx.logger.error(err);
-          throw err;
-        }
+        const code = await this.ejs(cmdCtx, resData, cmdCtx.source.ejsTemplate);
+        return h.parse(code);
       },
     },
     cmdLink: {
@@ -128,6 +131,45 @@ export default class CmdRenderer implements BeanTypeInterface {
           await cmdCtx.smallSession.execute(cmdLink);
         }
         return null;
+      },
+    },
+    puppeteer: {
+      r: async (cmdCtx, resData) => {
+        const page = await this.ctx.puppeteer.page();
+        const config = cmdCtx.source.rendererPuppeteer;
+        try {
+          if (config.rendererType === "url") {
+            await page.goto(Objects.flatten(resData)[0]);
+          } else if (config.rendererType === "html") {
+            const code = Array.isArray(resData) ? resData.join("") : JSON.stringify(resData);
+            await page.setContent(code);
+          } else if (config.rendererType === "ejs") {
+            const code = await this.ejs(cmdCtx, resData, config.ejsTemplate);
+            await page.setContent(code);
+          }
+          await page.waitForNetworkIdle();
+
+          if (config.waitType === "function") {
+            await page.waitForFunction(`async ()=>{${config.waitFn}}`, {
+              timeout: config.waitTimeout,
+            });
+          } else if (config.waitType === "selector") {
+            await page.waitForSelector(config.waitSelector || "body", {
+              timeout: config.waitTimeout,
+            });
+          } else if (config.waitType === "sleep") {
+            await this.ctx.sleep(config.waitTime);
+          }
+          const ele = await page.$(config.screenshotSelector || "body");
+          const clip = await ele.boundingBox();
+          const screenshot = await page.screenshot({
+            clip,
+            omitBackground: config.screenshotOmitBackground,
+          });
+          return h.image(screenshot, "image/png");
+        } finally {
+          await page?.close();
+        }
       },
     },
   };

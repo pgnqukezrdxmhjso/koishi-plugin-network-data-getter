@@ -11,6 +11,8 @@ import {} from "koishi-plugin-message-topic-service";
 import {} from "koishi-plugin-cron";
 // noinspection ES6UnusedImports
 import {} from "@koishijs/cache";
+// noinspection ES6UnusedImports
+import {} from "koishi-plugin-puppeteer";
 import { Config } from "./Config";
 import CoreCmd from "./CoreCmd";
 import CoreAnonymousStatistics from "./CoreAnonymousStatistics";
@@ -19,7 +21,7 @@ import { BeanHelper } from "./utils/BeanHelper";
 
 export const inject = {
   required: ["http", "umamiStatisticsService"],
-  optional: ["messageTopicService", "cron", "cache"],
+  optional: ["cron", "cache", "puppeteer", "messageTopicService"],
 };
 
 export { Config } from "./Config";
