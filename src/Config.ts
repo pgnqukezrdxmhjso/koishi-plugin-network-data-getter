@@ -365,7 +365,7 @@ export const Config: Schema<Config> = Schema.intersect([
             dataType: Schema.const("function").required(),
             dataFunction: Schema.string()
               .role("textarea", { rows: [3, 9] })
-              .required()
+              .default("return $response.data")
               .description(
                 "**return** 返回的值將會傳遞給渲染器 返回非[]與{}的型別將會自動包裹[]  \n" +
                   "入參使用方法見專家模式中的 **_prompt**  \n" +
@@ -706,7 +706,11 @@ export const Config: Schema<Config> = Schema.intersect([
                 proxyAgent: Schema.string().description("代理地址，本指令獨享"),
                 renderedMediaUrlToBase64: Schema.boolean()
                   .default(true)
-                  .description("渲染型別為資源類時自動將url下載後轉base64  \n此配置可使用本插件的代理配置下載資料"),
+                  .description(
+                    "響應資料處理器不為資源與返回了$urlToBase64呼叫結果的自定義函式  \n" +
+                      "並且渲染型別為資源類時自動將url下載後轉base64  \n" +
+                      "此配置可使用本插件的代理配置下載資料",
+                  ),
               }),
               Schema.union([
                 Schema.object({

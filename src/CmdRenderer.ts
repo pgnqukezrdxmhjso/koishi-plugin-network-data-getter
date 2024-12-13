@@ -56,35 +56,29 @@ export default class CmdRenderer implements BeanTypeInterface {
   }
 
   private async ejs(cmdCtx: CmdCtx, resData: ResData, ejsTemplate: string) {
-    try {
-      if (!ejsTemplate) {
-        return JSON.stringify(resData);
-      }
-      const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
-      const code = await render(
-        ejsTemplate,
-        {
-          $e: cmdCtx.smallSession.event,
-          $cache: this.ctx.cache,
-          $tmpPool: cmdCtx.tmpPool,
-          data: resData,
-          ...iFns.fns,
-          ...(cmdCtx.presetPool.presetConstantPool ?? {}),
-          ...(cmdCtx.presetPool.presetFnPool ?? {}),
-          ...(cmdCtx.optionInfoMap.map ?? {}),
-          $data: resData,
-        },
-        {
-          async: true,
-          rmWhitespace: true,
-        },
-      );
-      return code.replace(/\n\n/g, "\n");
-    } catch (err) {
-      this.ctx.logger.error("Error while parsing ejs data and json:");
-      this.ctx.logger.error(err);
-      throw err;
+    if (!ejsTemplate) {
+      return JSON.stringify(resData);
     }
+    const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
+    const code = await render(
+      ejsTemplate,
+      {
+        $e: cmdCtx.smallSession.event,
+        $cache: this.ctx.cache,
+        $tmpPool: cmdCtx.tmpPool,
+        data: resData,
+        ...iFns.fns,
+        ...(cmdCtx.presetPool.presetConstantPool ?? {}),
+        ...(cmdCtx.presetPool.presetFnPool ?? {}),
+        ...(cmdCtx.optionInfoMap.map ?? {}),
+        $data: resData,
+      },
+      {
+        async: true,
+        rmWhitespace: true,
+      },
+    );
+    return code.replace(/\n\n/g, "\n");
   }
 
   rendererMap: { [key in RendererType]: Renderer } = {

@@ -93,6 +93,16 @@ export default class CmdCommon implements BeanTypeInterface {
       fnArgs.push(args[key]);
     }
     return async (code: string) => {
+      const rows = code.split(/\r\n|[\r\n]/);
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (Strings.isNotBlank(rows[i])) {
+          break;
+        }
+        rows.pop();
+      }
+      if (rows.length === 1 && !rows[0].trim().startsWith("return")) {
+        code = "return " + rows[0];
+      }
       const fn = AsyncFunction(...fnArgTexts, code);
       return fn.apply(fn, fnArgs);
     };

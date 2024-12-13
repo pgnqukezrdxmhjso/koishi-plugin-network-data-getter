@@ -35,7 +35,7 @@ export default class CmdResData implements BeanTypeInterface {
       if (source.jsonKey) {
         data = Objects.getValue(data, source.jsonKey.replace(/[;{}]/g, ""));
       }
-      return data;
+      return data instanceof Object ? data : [data];
     },
     txt: (res) => {
       const data = res.data ?? "";
@@ -67,12 +67,14 @@ export default class CmdResData implements BeanTypeInterface {
     plain: (res) => {
       let data = res.data;
       if (data instanceof ArrayBuffer) {
-        data = Buffer.from(data).toString();
+        data = JSON.parse(Buffer.from(data).toString());
+      } else if (typeof data === "string") {
+        data = JSON.parse(data);
       }
-      return typeof data === "string" ? JSON.parse(data) : data;
+      return data;
     },
     function: async (res, cmdCtx) => {
-      if (!cmdCtx.source.dataFunction) {
+      if (Strings.isBlank(cmdCtx.source.dataFunction)) {
         return;
       }
       const data = await this.cmdCommon.generateCodeRunner(cmdCtx, {
