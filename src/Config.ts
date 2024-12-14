@@ -442,6 +442,13 @@ export const Config: Schema<Config> = Schema.intersect([
             sendType: Schema.const("puppeteer").required(),
             rendererPuppeteer: Schema.intersect([
               Schema.object({
+                _explain: Schema.never().description(
+                  "在網頁中可以透過 **_netGet.xx** 使用 專家模式中的 **_prompt**  \n" +
+                  "不需要加 **<%= %>**  \n" +
+                  "無法使用**函式**與**服務**  \n" +
+                  "#可額外使用  \n" +
+                  "**_netGet.$data** 響應資料處理器返回的值",
+                ),
                 rendererType: Schema.union([
                   Schema.const("html").description("html程式碼"),
                   Schema.const("url").description("網站地址"),
@@ -741,7 +748,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     Schema.union([
                       Schema.object({
                         type: Schema.const("reqBefore").required(),
-                        _explain: Schema.never().description(
+                        _explain1: Schema.never().description(
                           "#可額外使用  \n" +
                             "**$url**  \n" +
                             "**$requestConfig** [HTTP.RequestConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)",
@@ -749,14 +756,14 @@ export const Config: Schema<Config> = Schema.intersect([
                       }),
                       Schema.object({
                         type: Schema.const("resDataBefore").required(),
-                        _explain: Schema.never().description(
+                        _explain1: Schema.never().description(
                           "#可額外使用  \n" +
                             "**$response** [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)",
                         ),
                       }),
                       Schema.object({
                         type: Schema.const("renderedBefore").required(),
-                        _explain: Schema.never().description("#可額外使用  \n" + "**$resData** [] | {}"),
+                        _explain1: Schema.never().description("#可額外使用  \n" + "**$resData** [] | {}"),
                       }),
                       Schema.object({}),
                     ]),

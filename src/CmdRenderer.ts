@@ -132,6 +132,16 @@ export default class CmdRenderer implements BeanTypeInterface {
         const page = await this.ctx.puppeteer.page();
         const config = cmdCtx.source.rendererPuppeteer;
         try {
+          const obj = {
+            $e: cmdCtx.smallSession.event,
+            $tmpPool: cmdCtx.tmpPool,
+            ...(cmdCtx.presetPool.presetConstantPool ?? {}),
+            ...(cmdCtx.optionInfoMap.map ?? {}),
+            $data: resData,
+          };
+          await page.evaluate((obj) => (window["_netGet"] = obj), obj);
+          await page.evaluateOnNewDocument((obj) => (window["_netGet"] = obj), obj);
+
           if (config.rendererType === "url") {
             await page.goto(Objects.flatten(resData)[0]);
           } else if (config.rendererType === "html") {
