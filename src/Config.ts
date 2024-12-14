@@ -331,7 +331,6 @@ export const Config: Schema<Config> = Schema.intersect([
           recall: Schema.number().default(0).description("訊息撤回時限(分鐘,0為不撤回)"),
           sourceUrl: Schema.string()
             .role("textarea", { rows: [1, 9] })
-            .required()
             .description("請求地址  \n可以不填寫，將不會發起請求。用於結合響應資料處理器-自定義函式使用"),
           requestMethod: Schema.union(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "PURGE", "LINK", "UNLINK"])
             .default("GET")
