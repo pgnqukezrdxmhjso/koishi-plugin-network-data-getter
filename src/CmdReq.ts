@@ -6,7 +6,7 @@ import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
 import { CmdCtx } from "./CoreCmd";
-import CmdCommon from "./CmdCommon";
+import CmdCommon, { BizError } from "./CmdCommon";
 import CmdHttp from "./CmdHttp";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 import { Config } from "./Config";
@@ -74,6 +74,18 @@ export default class CmdReq implements BeanTypeInterface {
 
     requestConfig.headers = { ...(expert.requestHeaders || {}) };
     await this.cmdCommon.formatObjOption(cmdCtx, requestConfig.headers, true);
+
+    if (expert.resModified.type === "LastModified") {
+      const val = await this.cmdCommon.cacheGet("LastModified_" + cmdCtx.source.command);
+      if (val) {
+        requestConfig.headers["If-modified-Since"] = val;
+      }
+    } else if (expert.resModified.type === "ETag") {
+      const val = await this.cmdCommon.cacheGet("ETag_" + cmdCtx.source.command);
+      if (val) {
+        requestConfig.headers["If-None-Match"] = val;
+      }
+    }
 
     switch (expert.requestDataType) {
       case "raw": {
@@ -149,14 +161,18 @@ export default class CmdReq implements BeanTypeInterface {
     await this.cmdCommon.runHookFns(cmdCtx, "reqDataBefore");
     const url = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.sourceUrl);
     await this.handleReqExpert(cmdCtx, requestConfig);
-    const httpClient = this.cmdHttp.getCmdHttpClient(cmdCtx.source);
 
     await this.cmdCommon.runHookFns(cmdCtx, "reqBefore", {
       url,
       requestConfig,
     });
     this.reqLog(cmdCtx, url, requestConfig);
+    const httpClient = this.cmdHttp.getCmdHttpClient(cmdCtx.source);
     const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
+
+    if(res.status === 304 && ["LastModified", "ETag"].includes(cmdCtx.source.expert?.resModified?.type)){
+      throw new BizError(cmdCtx.source.expert.resModified.type + " unmodified", "resModified");
+    }
 
     this.debugInfo(() => `cmdNetRes; ${cmdCtx.smallSession.content}\n${JSON.stringify(res, null, 1)}`);
     return res;

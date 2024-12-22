@@ -1,10 +1,11 @@
+import { createHash } from "node:crypto";
 import { parse } from "node-html-parser";
 import { Context, HTTP } from "koishi";
 import { BaseProcessorType, Config } from "./Config";
 import Objects from "./utils/Objects";
 import { CmdCtx } from "./CoreCmd";
 import Strings from "./utils/Strings";
-import CmdCommon from "./CmdCommon";
+import CmdCommon, { BizError } from "./CmdCommon";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
 export type ResData = Record<any, any> | any[];
@@ -84,6 +85,33 @@ export default class CmdResData implements BeanTypeInterface {
     },
   };
 
+  async resModified(cmdCtx: CmdCtx, res: HTTP.Response, resData: ResData) {
+    if (!cmdCtx.source.expertMode || !cmdCtx.source.expert) {
+      return;
+    }
+    const type = cmdCtx.source.expert.resModified.type;
+    if (type === "LastModified") {
+      const val = res.headers.get("Last-Modified");
+      if (val) {
+        await this.cmdCommon.cacheSet("LastModified_" + cmdCtx.source.command, val);
+      }
+    } else if (type === "ETag") {
+      const val = res.headers.get("ETag");
+      if (val) {
+        await this.cmdCommon.cacheSet("ETag_" + cmdCtx.source.command, val);
+      }
+    } else if (type === "resDataHash") {
+      const cacheHash = await this.cmdCommon.cacheGet("resDataHash_" + cmdCtx.source.command);
+      const hash = createHash("md5");
+      hash.update(JSON.stringify(resData));
+      const val = hash.digest("hex");
+      if (cacheHash && cacheHash === val) {
+        throw new BizError("resDataHash unmodified", "resModified");
+      }
+      await this.cmdCommon.cacheSet("resDataHash_" + cmdCtx.source.command, val);
+    }
+  }
+
   async cmdResData(cmdCtx: CmdCtx, res: HTTP.Response): Promise<ResData> {
     const processor = this.baseProcessorMap[cmdCtx.source.dataType];
     if (!processor) {
@@ -96,6 +124,7 @@ export default class CmdResData implements BeanTypeInterface {
     if (resData === undefined || resData === null) {
       throw "沒有獲取到資料";
     }
+    await this.resModified(cmdCtx, res, resData);
     return resData;
   }
 }

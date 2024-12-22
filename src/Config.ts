@@ -14,6 +14,7 @@ export type HttpErrorShowToMsg = "hide" | "show";
 export type SourceHttpErrorShowToMsg = "inherit" | HttpErrorShowToMsg | "function";
 export type MsgSendMode = "direct" | "topic";
 export type HookFnsType = "reqDataBefore" | "reqBefore" | "resDataBefore" | "renderedBefore";
+export type ResModifiedType = "none" | "LastModified" | "ETag" | "resDataHash";
 
 export interface CommandArg {
   name: string;
@@ -39,6 +40,10 @@ export interface HookFn {
   fn: string;
 }
 
+export interface ResModified {
+  type: ResModifiedType;
+}
+
 export interface SourceExpert {
   scheduledTask: boolean;
   cron?: string;
@@ -54,6 +59,7 @@ export interface SourceExpert {
   proxyAgent?: string;
   renderedMediaUrlToBase64: boolean;
   rendererRequestHeaders?: Dict<string, string>;
+  resModified: ResModified;
   hookFns: HookFn[];
 }
 
@@ -443,10 +449,10 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.object({
                 _explain: Schema.never().description(
                   "在網頁中可以透過 **_netGet.xx** 使用 專家模式中的 **_prompt**  \n" +
-                  "不需要加 **<%= %>**  \n" +
-                  "無法使用**函式**與**服務**  \n" +
-                  "#可額外使用  \n" +
-                  "**_netGet.$data** 響應資料處理器返回的值",
+                    "不需要加 **<%= %>**  \n" +
+                    "無法使用**函式**與**服務**  \n" +
+                    "#可額外使用  \n" +
+                    "**_netGet.$data** 響應資料處理器返回的值",
                 ),
                 rendererType: Schema.union([
                   Schema.const("html").description("html程式碼"),
@@ -725,6 +731,20 @@ export const Config: Schema<Config> = Schema.intersect([
                 }),
                 Schema.object({}),
               ]),
+              Schema.object({
+                resModified: Schema.intersect([
+                  Schema.object({
+                    type: Schema.union([
+                      Schema.const("none").description("無"),
+                      Schema.const("LastModified").description("Last-Modified與If-Modified-Since"),
+                      Schema.const("ETag").description("ETag與If-None-Match"),
+                      Schema.const("resDataHash").description("響應資料處理器的返回值的hash"),
+                    ])
+                      .default("none")
+                      .description("判斷響應內容是否有變化，設定後無變化的響應不會傳送訊息"),
+                  }),
+                ]),
+              }),
               Schema.object({
                 hookFns: Schema.array(
                   Schema.intersect([

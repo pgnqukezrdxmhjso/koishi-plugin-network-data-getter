@@ -5,16 +5,26 @@
     </div>
     <div :class="$style.scroll">
       <div :class="$style['cmd-list']">
-        <div v-for="item in sources" @click="toCmd(item.command)" :key="item.command">
+        <div
+          ref="cmdListRef"
+          :class="i === currentSourceIndex ? $style.active : ''"
+          v-for="(item, i) in sources"
+          @click="toCmd(item.command)"
+          :key="item.command"
+        >
           {{ item.command }}
         </div>
       </div>
+    </div>
+    <div :class="$style['turn-page']">
+      <el-button @click="turnPage()">☝</el-button>
+      <el-button @click="turnPage(true)">👇</el-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { inject, reactive, onUnmounted, computed, ComputedRef } from "vue";
+import { inject, reactive, onUnmounted, computed, ComputedRef, ref, watch } from "vue";
 import IconMove from "../assets/icon/IconMove.vue";
 import { Config } from "../../src";
 
@@ -63,12 +73,28 @@ const endMove = () => {
   mouseInfo.ing = false;
 };
 
+const cmdListRef = ref();
+const currentSourceIndex = ref(-1);
+const interval = setInterval(() => {
+  currentSourceIndex.value = currentSourceNode().index;
+}, 500);
+watch(currentSourceIndex, (val) => {
+  if (val < 0) {
+    return;
+  }
+  cmdListRef.value?.[val]?.scrollIntoView?.({
+    behavior: "smooth",
+    block: "nearest",
+  });
+});
+
 window.addEventListener("mousemove", onMousemove);
 window.addEventListener("mouseup", endMove);
 window.addEventListener("touchmove", onMousemove);
 window.addEventListener("touchend", endMove);
 
 onUnmounted(() => {
+  clearInterval(interval);
   window.removeEventListener("mousemove", onMousemove);
   window.removeEventListener("mouseup", endMove);
   window.removeEventListener("touchmove", onMousemove);
@@ -81,9 +107,9 @@ const sources = computed(() => {
 });
 
 const toCmd = (cmd: string) => {
-  const docs = document.querySelectorAll(".k-schema-left");
-  for (let i in docs) {
-    const item = docs[i];
+  const nodes = document.querySelectorAll(".k-schema-left");
+  for (let i in nodes) {
+    const item = nodes[i];
     if (
       item.innerHTML.includes("sources[") &&
       item.innerHTML.includes("command") &&
@@ -95,6 +121,35 @@ const toCmd = (cmd: string) => {
       return;
     }
   }
+};
+
+const currentSourceNode = () => {
+  const nodes = document.querySelectorAll(".k-form > .k-schema-group:last-child > .k-schema-group");
+  let index: number = -1;
+  const wHeight = window.innerHeight || document.documentElement.clientHeight;
+  const wHeight2 = wHeight / 2;
+  for (let i = 0; i < nodes.length; i++) {
+    const rect = nodes[i].getBoundingClientRect();
+    if (rect.top < wHeight && rect.bottom >= wHeight2) {
+      index = i;
+      break;
+    }
+  }
+  return { index, nodes };
+};
+
+const turnPage = (last = false) => {
+  let { index, nodes } = currentSourceNode();
+  index += last ? 1 : -1;
+  if (index < 0) {
+    index = 0;
+  }
+  if (index > nodes.length - 1) {
+    return;
+  }
+  nodes[index].scrollIntoView({
+    behavior: "smooth",
+  });
 };
 </script>
 
@@ -160,6 +215,17 @@ const toCmd = (cmd: string) => {
       padding: 3px 5px;
       background: rgba(255, 255, 255, 0.55);
       cursor: pointer;
+    }
+    .active {
+      background: rgba(249, 210, 229, 0.55);
+    }
+  }
+  .turn-page {
+    display: flex;
+    flex-direction: column;
+    & > * {
+      margin: 0;
+      border-radius: 0;
     }
   }
 }

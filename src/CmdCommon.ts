@@ -5,10 +5,17 @@ import Objects from "./utils/Objects";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 import { Config, HookFn, HookFnsType } from "./Config";
 import Strings from "./utils/Strings";
+// noinspection ES6UnusedImports
+import { Tables } from "@koishijs/cache";
+declare module "@koishijs/cache" {
+  interface Tables {
+    "network-data-getter": any;
+  }
+}
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
-export type BizErrorType = "hookBlock" | "hookBlock-msg";
+export type BizErrorType = "hookBlock" | "hookBlock-msg" | 'resModified';
 
 export class BizError extends Error {
   type: BizErrorType;
@@ -23,6 +30,7 @@ export default class CmdCommon implements BeanTypeInterface {
   private ctx: Context;
   private config: Config;
   private cmdHttp: CmdHttp;
+  private cache: Record<string, any> = {};
 
   constructor(beanHelper: BeanHelper) {
     this.ctx = beanHelper.getByName("ctx");
@@ -185,5 +193,19 @@ export default class CmdCommon implements BeanTypeInterface {
       }
     }
     return;
+  }
+
+  async cacheGet(key: string): Promise<Tables["network-data-getter"]> {
+    if (this.ctx.cache) {
+      return this.ctx.cache.get("network-data-getter", key);
+    }
+    return this.cache[key];
+  }
+
+  async cacheSet(key: string, value: Tables["network-data-getter"]) {
+    if (this.ctx.cache) {
+      await this.ctx.cache.set("network-data-getter", key, value);
+    }
+    this.cache[key] = value;
   }
 }

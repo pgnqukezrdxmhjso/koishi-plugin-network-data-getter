@@ -428,6 +428,9 @@ export default class CoreCmd implements BeanTypeInterface {
           return;
         } else if (e.type === "hookBlock-msg") {
           return e.message;
+        } else if (e.type === "resModified") {
+          this.ctx.logger.debug(e.message);
+          return;
         }
       }
       isError = true;
