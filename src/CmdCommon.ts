@@ -1,10 +1,14 @@
-import { CmdCtx } from "./CoreCmd";
+import crypto from "node:crypto";
+import * as OTPAuth from "otpauth";
 import { Context, HTTP } from "koishi";
+
+import { CmdCtx } from "./CoreCmd";
 import CmdHttp from "./CmdHttp";
 import Objects from "./utils/Objects";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 import { Config, HookFn, HookFnsType } from "./Config";
 import Strings from "./utils/Strings";
+
 // noinspection ES6UnusedImports
 import { Tables } from "@koishijs/cache";
 declare module "@koishijs/cache" {
@@ -31,6 +35,7 @@ export default class CmdCommon implements BeanTypeInterface {
   private config: Config;
   private cmdHttp: CmdHttp;
   private cache: Record<string, any> = {};
+  private codeRunnerModules: Record<string, any> = null;
 
   constructor(beanHelper: BeanHelper) {
     this.ctx = beanHelper.getByName("ctx");
@@ -63,57 +68,68 @@ export default class CmdCommon implements BeanTypeInterface {
     },
   };
 
-  buildInternalFns(cmdCtx: CmdCtx) {
-    const fns = {};
-    for (const name in this.internalFns) {
-      fns["$" + name] = this.internalFns[name].bind(this, cmdCtx);
-    }
-    return {
-      fns,
-      arg: `{${Object.keys(fns).join(",")}}`,
-    };
-  }
-
-  generateCodeRunner(cmdCtx: CmdCtx, expandData?: Record<string, any>) {
-    const iFns = this.buildInternalFns(cmdCtx);
-    const args = {
+  buildCodeRunnerValues(cmdCtx: CmdCtx, expandData?: Record<string, any>) {
+    const values = {
+      ...(cmdCtx.presetPool.presetConstantPool ?? {}),
+      ...(cmdCtx.optionInfoMap.map ?? {}),
       $e: cmdCtx.smallSession.event,
-      $cache: this.ctx.cache,
-      $logger: this.ctx.logger,
       $tmpPool: cmdCtx.tmpPool,
-      [iFns.arg]: iFns.fns,
-      [cmdCtx.presetPool.presetConstantPoolFnArg]: cmdCtx.presetPool.presetConstantPool ?? {},
-      [cmdCtx.presetPool.presetFnPoolFnArg]: cmdCtx.presetPool.presetFnPool ?? {},
     };
-
-    if (cmdCtx.optionInfoMap) {
-      args[cmdCtx.optionInfoMap.fnArg] = cmdCtx.optionInfoMap.map ?? {};
-    }
-
     if (expandData) {
       for (const key in expandData) {
-        args["$" + key] = expandData[key];
+        values["$" + key] = expandData[key];
       }
     }
-    const fnArgTexts = [];
-    const fnArgs = [];
-    for (const key in args) {
-      fnArgTexts.push(key);
-      fnArgs.push(args[key]);
+    return values;
+  }
+
+  buildCodeRunnerModules() {
+    if (!this.codeRunnerModules) {
+      this.codeRunnerModules = {
+        crypto,
+        OTPAuth,
+        http: BeanHelper.buildLazyProxy(() => this.ctx.http),
+        cache: BeanHelper.buildLazyProxy(() => this.ctx.cache),
+        logger: this.ctx.logger,
+      };
     }
+    return this.codeRunnerModules;
+  }
+
+  buildCodeRunnerArgs(cmdCtx: CmdCtx, expandData?: Record<string, any>) {
+    const args = {
+      ...(cmdCtx.presetPool.presetFnPool ?? {}),
+      ...this.buildCodeRunnerValues(cmdCtx, expandData),
+    };
+    const modules = this.buildCodeRunnerModules();
+    for (const key in modules) {
+      args["$" + key] = modules[key];
+    }
+
+    for (const name in this.internalFns) {
+      args["$" + name] = this.internalFns[name].bind(this, cmdCtx);
+    }
+
+    return args;
+  }
+
+  generateCodeRunner(cmdCtx: CmdCtx, completeReturn: boolean, expandData?: Record<string, any>) {
+    const args = this.buildCodeRunnerArgs(cmdCtx, expandData);
     return async (code: string) => {
-      const rows = code.split(/\r\n|[\r\n]/);
-      for (let i = rows.length - 1; i >= 0; i--) {
-        if (Strings.isNotBlank(rows[i])) {
-          break;
+      if (completeReturn) {
+        const rows = code.split(/\r\n|[\r\n]/);
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (Strings.isNotBlank(rows[i])) {
+            break;
+          }
+          rows.pop();
         }
-        rows.pop();
+        if (rows.length === 1 && !rows[0].trim().startsWith("return")) {
+          code = "return " + rows[0];
+        }
       }
-      if (rows.length === 1 && !rows[0].trim().startsWith("return")) {
-        code = "return " + rows[0];
-      }
-      const fn = AsyncFunction(...fnArgTexts, code);
-      return fn.apply(fn, fnArgs);
+      const fn = AsyncFunction("args", "with (args) {\n" + code + "\n}");
+      return fn.apply(fn, [args]);
     };
   }
 
@@ -127,7 +143,7 @@ export default class CmdCommon implements BeanTypeInterface {
       return content;
     }
 
-    const codeRunner = this.generateCodeRunner(cmdCtx, { data: data });
+    const codeRunner = this.generateCodeRunner(cmdCtx, false, { data: data });
 
     const resMap = {};
     for (let i = 0; i < contentList.length; i++) {
@@ -183,7 +199,7 @@ export default class CmdCommon implements BeanTypeInterface {
     const hookFns: HookFn[] = cmdCtx.source.expert?.hookFns?.filter(
       (hookFn) => hookFn.type === type && Strings.isNotBlank(hookFn.fn),
     );
-    const codeRunner = this.generateCodeRunner(cmdCtx, expandData);
+    const codeRunner = this.generateCodeRunner(cmdCtx, false, expandData);
     for (const hookFn of hookFns) {
       const res = await codeRunner(hookFn.fn);
       if (res === false) {

@@ -1,10 +1,8 @@
-import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 
 import { Argv, Command, Context, h, HTTP, Session } from "koishi";
 import { Channel, GuildMember } from "@satorijs/protocol";
-import * as OTPAuth from "otpauth";
 
 import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
 import CmdRenderer from "./CmdRenderer";
@@ -26,9 +24,7 @@ declare module "./" {
 
 export interface PresetPool {
   presetConstantPool: Record<string, OptionValue>;
-  presetConstantPoolFnArg: string;
   presetFnPool: Record<string, () => void>;
-  presetFnPoolFnArg: string;
 }
 
 type OptionInfoValue = OptionValue | GuildMember | Channel;
@@ -44,7 +40,6 @@ interface OptionInfo {
 export interface OptionInfoMap {
   infoMap: Record<string, OptionInfo>;
   map: Record<string, OptionInfoValue>;
-  fnArg: string;
 }
 
 export interface SmallSession {
@@ -75,9 +70,7 @@ export default class CoreCmd implements BeanTypeInterface {
   private cmdCommon: CmdCommon;
   private presetPool: PresetPool = {
     presetConstantPool: {},
-    presetConstantPoolFnArg: "{}={}",
     presetFnPool: {},
-    presetFnPoolFnArg: "{}={}",
   };
   private allCmdName: Set<string>;
   private allCommand: { [key in string]: Command };
@@ -121,7 +114,6 @@ export default class CoreCmd implements BeanTypeInterface {
         get: () => fs.readFileSync(filePath),
       });
     });
-    presetPool.presetConstantPoolFnArg = "{" + Object.keys(presetPool.presetConstantPool).join(",") + "}={}";
   }
 
   private initPresetFns() {
@@ -132,23 +124,18 @@ export default class CoreCmd implements BeanTypeInterface {
       if (!presetFn) {
         return;
       }
-      const moduleMap = {
-        crypto,
-        OTPAuth,
-        http: this.ctx.http,
-        cache: this.ctx.cache,
-        logger: this.ctx.logger,
-      };
+      const modules = this.cmdCommon.buildCodeRunnerModules();
 
       const fn = (presetFn.async ? AsyncFunction : Function)(
-        `{${Object.keys(moduleMap).join(",")}}`,
-        this.presetPool.presetConstantPoolFnArg,
+        "_args_312708",
         presetFn.args,
-        presetFn.body,
+        "with (_args_312708) {\n" + presetFn.body + "\n}",
       );
-      this.presetPool.presetFnPool[presetFn.name] = fn.bind(fn, moduleMap, this.presetPool.presetConstantPool ?? {});
+      this.presetPool.presetFnPool[presetFn.name] = fn.bind(fn, {
+        ...(this.presetPool.presetConstantPool ?? {}),
+        ...modules,
+      });
     });
-    this.presetPool.presetFnPoolFnArg = "{" + Object.keys(this.presetPool.presetFnPool).join(",") + "}={}";
   }
 
   private initAllCmdName() {
@@ -311,7 +298,6 @@ export default class CoreCmd implements BeanTypeInterface {
     const optionInfoMap: OptionInfoMap = {
       map: {},
       infoMap: {},
-      fnArg: "{}={}",
     };
     if (!source.expertMode || !source.expert) {
       return optionInfoMap;
@@ -331,7 +317,6 @@ export default class CoreCmd implements BeanTypeInterface {
       optionInfoMap.map["$" + i] = optionInfo.value;
       optionInfoMap.infoMap["$" + i] = optionInfo;
     }
-    optionInfoMap.fnArg = "{" + Object.keys(optionInfoMap.infoMap).join(",") + "}={}";
 
     return optionInfoMap;
   }
@@ -364,7 +349,7 @@ export default class CoreCmd implements BeanTypeInterface {
         if (!source.httpErrorShowToMsgFn) {
           throw e;
         }
-        element += await this.cmdCommon.generateCodeRunner(cmdCtx, {
+        element += await this.cmdCommon.generateCodeRunner(cmdCtx, true, {
           response: e.response,
           error: e,
         })(source.httpErrorShowToMsgFn);

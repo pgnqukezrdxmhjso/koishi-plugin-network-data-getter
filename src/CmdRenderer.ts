@@ -59,26 +59,10 @@ export default class CmdRenderer implements BeanTypeInterface {
     if (!ejsTemplate) {
       return JSON.stringify(resData);
     }
-    const iFns = this.cmdCommon.buildInternalFns(cmdCtx);
-    const code = await render(
-      ejsTemplate,
-      {
-        $e: cmdCtx.smallSession.event,
-        $cache: this.ctx.cache,
-        $logger: this.ctx.logger,
-        $tmpPool: cmdCtx.tmpPool,
-        data: resData,
-        ...iFns.fns,
-        ...(cmdCtx.presetPool.presetConstantPool ?? {}),
-        ...(cmdCtx.presetPool.presetFnPool ?? {}),
-        ...(cmdCtx.optionInfoMap.map ?? {}),
-        $data: resData,
-      },
-      {
-        async: true,
-        rmWhitespace: true,
-      },
-    );
+    const code = await render(ejsTemplate, this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }), {
+      async: true,
+      rmWhitespace: true,
+    });
     return code.replace(/\n+/g, "\n");
   }
 
@@ -133,13 +117,7 @@ export default class CmdRenderer implements BeanTypeInterface {
         const page = await this.ctx.puppeteer.page();
         const config = cmdCtx.source.rendererPuppeteer;
         try {
-          const obj = {
-            $e: cmdCtx.smallSession.event,
-            $tmpPool: cmdCtx.tmpPool,
-            ...(cmdCtx.presetPool.presetConstantPool ?? {}),
-            ...(cmdCtx.optionInfoMap.map ?? {}),
-            $data: resData,
-          };
+          const obj = this.cmdCommon.buildCodeRunnerValues(cmdCtx, { data: resData });
           await page.evaluate((obj) => (window["_netGet"] = obj), obj);
           await page.evaluateOnNewDocument((obj) => (window["_netGet"] = obj), obj);
 

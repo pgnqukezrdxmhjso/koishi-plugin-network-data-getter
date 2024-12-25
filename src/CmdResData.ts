@@ -78,7 +78,7 @@ export default class CmdResData implements BeanTypeInterface {
       if (Strings.isBlank(cmdCtx.source.dataFunction)) {
         return;
       }
-      const data = await this.cmdCommon.generateCodeRunner(cmdCtx, {
+      const data = await this.cmdCommon.generateCodeRunner(cmdCtx, true, {
         response: res,
       })(cmdCtx.source.dataFunction);
       return data instanceof Object ? data : [data];
