@@ -241,7 +241,7 @@ export const Config: Schema<Config> = Schema.intersect([
           "[輸出日誌](https://koishi.chat/zh-CN/api/utils/logger.html#%E7%B1%BB-logger): **logger**  \n",
       ),
       _internalFns: Schema.never().description(
-        "#內建函式  \n" +
+        "內建函式  \n" +
           "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
           "**await $urlToBase64({url,reqConfig})**  \n",
       ),
@@ -252,13 +252,13 @@ export const Config: Schema<Config> = Schema.intersect([
           "**$tmpPool** 每個請求獨立的臨時儲存，可以自由修改其中的變數  \n",
       ),
       _prompt: Schema.never().description(
-        "可使用**_modules**描述的內容,在此處使用需要在變數名前加**$** 例如 **$cache.get**  \n" +
-          "可使用**_internalFns**描述的內容  \n" +
-          "可使用**_values**描述的內容  \n",
+        "可使用 **_modules** 描述的內容,在此處使用需要在變數名前加 **$** 例如 **$cache.get**  \n" +
+          "可使用 **_internalFns** 描述的內容  \n" +
+          "可使用 **_values** 描述的內容  \n",
       ),
       _prompt2: Schema.never().description(
-        "可使用**_prompt**描述的內容  \n" +
-          "此處使用需要用**<%=  %>**包裹 例如 **<%= $cache.get %>**  \n" +
+        "可使用 **_prompt** 描述的內容  \n" +
+          "此處使用需要用 **<%=  %>** 包裹 例如 **<%= $cache.get %>**  \n" +
           "**<%= %>** 中允許使用 js程式碼 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n",
       ),
       expertMode: Schema.boolean().default(false).description("專家模式"),
@@ -329,7 +329,7 @@ export const Config: Schema<Config> = Schema.intersect([
             )
               .default(PresetFns)
               .collapse()
-              .description("預設函式，可在後續配置中使用  \n" + "可使用**_modules**描述的內容  \n"),
+              .description("預設函式，可在後續配置中使用  \n" + "可使用 **_modules** 描述的內容  \n"),
           }),
         ]),
       }),
@@ -356,7 +356,7 @@ export const Config: Schema<Config> = Schema.intersect([
           sourceUrl: Schema.string()
             .role("textarea", { rows: [1, 9] })
             .description(
-              "請求地址 可使用**_prompt2**描述的內容  \n可以不填寫，將不會發起請求。用於結合響應資料處理器-自定義函式使用",
+              "請求地址 可使用 **_prompt2** 描述的內容  \n可以不填寫，將不會發起請求。用於結合響應資料處理器-自定義函式使用",
             ),
           requestMethod: Schema.union(["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "PURGE", "LINK", "UNLINK"])
             .default("GET")
@@ -393,7 +393,7 @@ export const Config: Schema<Config> = Schema.intersect([
               .default("return $response.data")
               .description(
                 "**return** 返回的值將會傳遞給渲染器 返回非[]與{}的型別將會自動包裹[]  \n" +
-                  "可使用**_prompt**描述的內容  \n" +
+                  "可使用 **_prompt** 描述的內容  \n" +
                   "#可額外使用  \n" +
                   "**$response** [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n",
               ),
@@ -450,7 +450,7 @@ export const Config: Schema<Config> = Schema.intersect([
               .description(
                 "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
                   "此處使用的是[koishi標準元素](https://koishi.chat/zh-CN/api/message/elements.html)  \n" +
-                  "可使用**_prompt2**描述的內容  \n" +
+                  "可使用 **_prompt2** 描述的內容  \n" +
                   "#可額外使用  \n" +
                   "**$data** 響應資料處理器返回的值",
               ),
@@ -466,7 +466,7 @@ export const Config: Schema<Config> = Schema.intersect([
               .description(
                 "指令鏈  \n" +
                   "示範: echo <%=$data%>  \n" +
-                  "可使用**_prompt2**描述的內容  \n" +
+                  "可使用 **_prompt2** 描述的內容  \n" +
                   "#可額外使用  \n" +
                   "**$data** 響應資料處理器返回的值",
               ),
@@ -476,7 +476,7 @@ export const Config: Schema<Config> = Schema.intersect([
             rendererPuppeteer: Schema.intersect([
               Schema.object({
                 _explain: Schema.never().description(
-                  "在網頁中可以透過 **_netGet.xx** 使用**_values**描述的內容  \n" +
+                  "在網頁中可以透過 **_netGet.xx** 使用 **_values** 描述的內容  \n" +
                     "#可額外使用  \n" +
                     "**_netGet.$data** 響應資料處理器返回的值",
                 ),
@@ -496,7 +496,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     .required()
                     .description(
                       "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
-                        "可使用**_prompt2**描述的內容  \n" +
+                        "可使用 **_prompt2** 描述的內容  \n" +
                         "#可額外使用  \n" +
                         "**$data** 響應資料處理器返回的值",
                     ),
@@ -583,7 +583,7 @@ export const Config: Schema<Config> = Schema.intersect([
               .required()
               .description(
                 "**return** 返回的值將會加入回覆訊息中  \n" +
-                  "可使用**_prompt**描述的內容  \n" +
+                  "可使用 **_prompt** 描述的內容  \n" +
                   "#可額外使用  \n" +
                   "**$response** [HTTP.Response](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L109)  \n" +
                   "**$error** [HTTPError](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L30)",
@@ -711,7 +711,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 requestHeaders: Schema.dict(String)
                   .role("table")
                   .default({})
-                  .description("請求頭 可使用**_prompt2**描述的內容"),
+                  .description("請求頭 可使用 **_prompt2** 描述的內容"),
                 requestDataType: Schema.union([
                   Schema.const("empty").description("無"),
                   "form-data",
@@ -724,12 +724,12 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.union([
                 Schema.object({
                   requestDataType: Schema.const("form-data").required(),
-                  requestForm: Schema.dict(String).role("table").description("請求資料 可使用**_prompt2**描述的內容"),
+                  requestForm: Schema.dict(String).role("table").description("請求資料 可使用 **_prompt2** 描述的內容"),
                   requestFormFiles: Schema.dict(Schema.path()).default({}).description("請求檔案"),
                 }),
                 Schema.object({
                   requestDataType: Schema.const("x-www-form-urlencoded").required(),
-                  requestForm: Schema.dict(String).role("table").description("請求資料 可使用**_prompt2**描述的內容"),
+                  requestForm: Schema.dict(String).role("table").description("請求資料 可使用 **_prompt2** 描述的內容"),
                 }),
                 Schema.object({
                   requestDataType: Schema.const("raw").required(),
@@ -737,7 +737,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   requestRaw: Schema.string()
                     .role("textarea")
                     .default("")
-                    .description("請求資料 可使用**_prompt2**描述的內容"),
+                    .description("請求資料 可使用 **_prompt2** 描述的內容"),
                 }),
                 Schema.object({} as any),
               ]),
@@ -757,7 +757,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   rendererRequestHeaders: Schema.dict(String)
                     .role("table")
                     .default({})
-                    .description("渲染資源類請求頭 可使用**_prompt2**描述的內容"),
+                    .description("渲染資源類請求頭 可使用 **_prompt2** 描述的內容"),
                 }),
                 Schema.object({}),
               ]),
@@ -799,7 +799,7 @@ export const Config: Schema<Config> = Schema.intersect([
                         .default("reqDataBefore")
                         .description("型別"),
                       _explain: Schema.never().description(
-                        "可使用**_prompt**描述的內容  \n" +
+                        "可使用 **_prompt** 描述的內容  \n" +
                           "**return false** 阻斷執行  \n" +
                           '**return "字串"** 阻斷執行並返回訊息  \n',
                       ),
