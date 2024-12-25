@@ -85,11 +85,16 @@ export default class CmdResData implements BeanTypeInterface {
     },
   };
 
-  async resModified(cmdCtx: CmdCtx, res: HTTP.Response, resData: ResData) {
-    if (!cmdCtx.source.expertMode || !cmdCtx.source.expert) {
+  async handleResModified(cmdCtx: CmdCtx, res: HTTP.Response, resData: ResData) {
+    const type = cmdCtx.source.expert?.resModified.type;
+    if (
+      !cmdCtx.source.expertMode ||
+      !cmdCtx.source.expert ||
+      type === "none" ||
+      (cmdCtx.source.expert.resModified.ignoreUserCall && cmdCtx.isUserCall)
+    ) {
       return;
     }
-    const type = cmdCtx.source.expert.resModified.type;
     if (type === "LastModified") {
       const val = res.headers.get("Last-Modified");
       if (val) {
@@ -124,7 +129,7 @@ export default class CmdResData implements BeanTypeInterface {
     if (resData === undefined || resData === null) {
       throw "沒有獲取到資料";
     }
-    await this.resModified(cmdCtx, res, resData);
+    await this.handleResModified(cmdCtx, res, resData);
     return resData;
   }
 }

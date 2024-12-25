@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 
-import { Argv, Command, Context, Fragment, h, HTTP, Session } from "koishi";
+import { Argv, Command, Context, h, HTTP, Session } from "koishi";
 import { Channel, GuildMember } from "@satorijs/protocol";
 import * as OTPAuth from "otpauth";
 
@@ -60,6 +60,7 @@ export interface CmdCtx {
   optionInfoMap: OptionInfoMap;
   smallSession: SmallSession;
   tmpPool: Record<string, any>;
+  isUserCall: boolean;
 }
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
@@ -124,29 +125,30 @@ export default class CoreCmd implements BeanTypeInterface {
   }
 
   private initPresetFns() {
-    const { ctx, config, presetPool } = this;
-    if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetFns)) {
+    if (!this.config.expertMode || !this.config.expert || Arrays.isEmpty(this.config.expert.presetFns)) {
       return;
     }
-    config.expert.presetFns.forEach((presetFn) => {
+    this.config.expert.presetFns.forEach((presetFn) => {
       if (!presetFn) {
         return;
       }
       const moduleMap = {
         crypto,
         OTPAuth,
-        http: ctx.http,
+        http: this.ctx.http,
+        cache: this.ctx.cache,
+        logger: this.ctx.logger,
       };
 
       const fn = (presetFn.async ? AsyncFunction : Function)(
         `{${Object.keys(moduleMap).join(",")}}`,
-        presetPool.presetConstantPoolFnArg,
+        this.presetPool.presetConstantPoolFnArg,
         presetFn.args,
         presetFn.body,
       );
-      presetPool.presetFnPool[presetFn.name] = fn.bind(fn, moduleMap, presetPool.presetConstantPool ?? {});
+      this.presetPool.presetFnPool[presetFn.name] = fn.bind(fn, moduleMap, this.presetPool.presetConstantPool ?? {});
     });
-    presetPool.presetFnPoolFnArg = "{" + Object.keys(presetPool.presetFnPool).join(",") + "}={}";
+    this.presetPool.presetFnPoolFnArg = "{" + Object.keys(this.presetPool.presetFnPool).join(",") + "}={}";
   }
 
   private initAllCmdName() {
@@ -204,9 +206,13 @@ export default class CoreCmd implements BeanTypeInterface {
   }
 
   private registerCmd() {
+    let commandPrefix = "";
+    if (Strings.isNotBlank(this.config.commandGroup)) {
+      commandPrefix = this.config.commandGroup + "/";
+    }
     this.allCommand = {};
     this.config.sources.forEach((source) => {
-      let def = source.command;
+      let def = commandPrefix + source.command;
       if (source.expertMode) {
         source.expert?.commandArgs?.forEach((arg) => {
           def +=
@@ -230,7 +236,7 @@ export default class CoreCmd implements BeanTypeInterface {
           },
         })
         .alias(...source.alias)
-        .action(async (argv) => this.runCmd(source, argv));
+        .action(async (argv) => this.runCmd(source, argv, true));
       this.allCommand[source.command] = command;
 
       if (source.expertMode) {
@@ -337,7 +343,7 @@ export default class CoreCmd implements BeanTypeInterface {
     const { source } = cmdCtx;
     const httpErrorShowToMsg =
       source.httpErrorShowToMsg !== "inherit" ? source.httpErrorShowToMsg : this.config.httpErrorShowToMsg;
-    let fragment = `執行指令 ${source.command} 失敗: `;
+    let element = `執行指令 ${source.command} 失敗: `;
     switch (httpErrorShowToMsg) {
       case "hide": {
         throw e;
@@ -345,11 +351,11 @@ export default class CoreCmd implements BeanTypeInterface {
       case "show": {
         const res = e.response;
         if (!res) {
-          fragment += e.message;
+          element += e.message;
         } else {
-          fragment += res.statusText || "";
+          element += res.statusText || "";
           if (res.data) {
-            fragment += " " + (typeof res.data === "object" ? JSON.stringify(res.data) : res.data);
+            element += " " + (typeof res.data === "object" ? JSON.stringify(res.data) : res.data);
           }
         }
         break;
@@ -358,17 +364,17 @@ export default class CoreCmd implements BeanTypeInterface {
         if (!source.httpErrorShowToMsgFn) {
           throw e;
         }
-        fragment += await this.cmdCommon.generateCodeRunner(cmdCtx, {
+        element += await this.cmdCommon.generateCodeRunner(cmdCtx, {
           response: e.response,
           error: e,
         })(source.httpErrorShowToMsgFn);
         break;
       }
     }
-    return h.parse(fragment);
+    return h.parse(element);
   }
 
-  private async cmdTopic(source: CmdSource, argv: Argv): Promise<string> {
+  private async cmdTopic(source: CmdSource, argv: Argv): Promise<h[]> {
     if (source.msgSendMode !== "topic" || typeof argv.options["topic"] !== "boolean") {
       return null;
     }
@@ -379,17 +385,21 @@ export default class CoreCmd implements BeanTypeInterface {
       bindingKey: source.msgTopic || "net-get." + source.command,
       enable: argv.options["topic"],
     });
-    return (argv.options["topic"] ? "訂閱" : "退訂") + "成功";
+    return h.parse((argv.options["topic"] ? "訂閱" : "退訂") + "成功");
   }
 
-  private async runCmd(source: CmdSource, argv: Argv, smallSession?: SmallSession): Promise<Fragment> {
+  private async runCmd(source: CmdSource, argv: Argv, isUserCall: boolean, smallSession?: SmallSession): Promise<h[]> {
     this.pluginEventEmitter.emit("cmd-action", argv);
     this.ctx.logger.debug("args: ", argv.args);
     this.ctx.logger.debug("options: ", argv.options);
 
-    const topicMsg: string = await this.cmdTopic(source, argv);
+    const topicMsg = await this.cmdTopic(source, argv);
     if (topicMsg) {
       return topicMsg;
+    }
+
+    if (isUserCall && source.expertMode && source.expert?.disableUserCall) {
+      return;
     }
 
     const session: Session = argv.session;
@@ -413,34 +423,35 @@ export default class CoreCmd implements BeanTypeInterface {
       smallSession,
       optionInfoMap: null,
       tmpPool: {},
+      isUserCall,
     };
-    let fragment: Fragment;
+    let elements: h[];
     let isError: boolean = false;
     try {
       cmdCtx.optionInfoMap = await this.handleOptionInfos(source, argv);
       const res: HTTP.Response = await this.cmdReq.cmdReq(cmdCtx);
       const resData: ResData = await this.cmdResData.cmdResData(cmdCtx, res);
-      fragment = await this.cmdRenderer.rendered(cmdCtx, resData);
+      elements = await this.cmdRenderer.rendered(cmdCtx, resData);
     } catch (e) {
       if (e instanceof BizError) {
         if (e.type === "hookBlock") {
           this.ctx.logger.info(e.message);
           return;
         } else if (e.type === "hookBlock-msg") {
-          return e.message;
+          return h.parse(e.message);
         } else if (e.type === "resModified") {
           this.ctx.logger.debug(e.message);
           return;
         }
       }
       isError = true;
-      fragment = await this.sendHttpError(cmdCtx, e);
+      elements = await this.sendHttpError(cmdCtx, e);
       if (!session?.send) {
-        throw new Error(fragment + "");
+        throw new Error(elements + "");
       }
     }
 
-    if (!fragment) {
+    if (!elements) {
       return;
     }
     if (msgId) {
@@ -448,15 +459,15 @@ export default class CoreCmd implements BeanTypeInterface {
     }
 
     if (!isError && this.ctx.messageTopicService && source.msgSendMode === "topic") {
-      await this.ctx.messageTopicService.sendMessageToTopic(source.msgTopic || "net-get." + source.command, fragment, {
+      await this.ctx.messageTopicService.sendMessageToTopic(source.msgTopic || "net-get." + source.command, elements, {
         retractTime: source.recall > 0 ? source.recall * 60000 : undefined,
       });
-      fragment = "訊息推送成功";
+      elements = h.parse("訊息推送成功");
     }
     if (!session?.send) {
-      return fragment;
+      return elements;
     }
-    const msgIds: string[] = await session.send(fragment);
+    const msgIds: string[] = await session.send(elements);
     if (source.recall > 0) {
       this.ctx.setTimeout(
         () => msgIds.forEach((mId: string) => session.bot.deleteMessage(session.channelId, mId)),
@@ -468,7 +479,7 @@ export default class CoreCmd implements BeanTypeInterface {
   private registerTask() {
     const registerList: CmdSource[] = this.config.sources.filter((source) => {
       const expert = source.expert;
-      if (!expert?.scheduledTask || Strings.isBlank(expert.cron) || Strings.isBlank(expert.scheduledTaskContent)) {
+      if (!expert?.scheduledTask || Strings.isBlank(expert.cron)) {
         return false;
       }
       const refuseText = source.command + " 指令, 註冊定時執行失敗: ";
@@ -481,7 +492,7 @@ export default class CoreCmd implements BeanTypeInterface {
         return false;
       }
 
-      const argv = this.allCommand[source.command].parse(expert.scheduledTaskContent);
+      const argv = this.allCommand[source.command].parse(expert.scheduledTaskContent ?? "");
       if (Strings.isNotBlank(argv.error)) {
         this.ctx.logger.info(refuseText + "執行的內容解析出現錯誤 " + argv.error);
         return false;
@@ -502,8 +513,8 @@ export default class CoreCmd implements BeanTypeInterface {
   }
 
   private async runTask(source: CmdSource, command: Command) {
-    const argv = command.parse(source.expert.scheduledTaskContent);
-    const fragment = await this.runCmd(source, argv, {
+    const argv = command.parse(source.expert.scheduledTaskContent ?? "");
+    const elements = await this.runCmd(source, argv, false, {
       platform: "network-data-getter",
       event: {
         id: Date.now(),
@@ -520,6 +531,8 @@ export default class CoreCmd implements BeanTypeInterface {
       content: argv.source,
       execute: null,
     });
-    this.ctx.logger.info(source.command + " " + fragment);
+    if (elements) {
+      this.ctx.logger.info(source.command + " " + elements);
+    }
   }
 }

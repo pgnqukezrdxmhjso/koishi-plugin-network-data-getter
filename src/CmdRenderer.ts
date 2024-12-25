@@ -1,4 +1,4 @@
-import { Context, Fragment, h, Random } from "koishi";
+import { Context, h, Random } from "koishi";
 import { render } from "ejs";
 
 import { CmdCtx } from "./CoreCmd";
@@ -12,7 +12,7 @@ import Arrays from "./utils/Arrays";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
 type Renderer = {
-  r: (cmdCtx: CmdCtx, resData: ResData) => Promise<Fragment>;
+  r: (cmdCtx: CmdCtx, resData: ResData) => Promise<h[]>;
   verify?: (val: any) => Promise<boolean>;
 };
 
@@ -65,6 +65,7 @@ export default class CmdRenderer implements BeanTypeInterface {
       {
         $e: cmdCtx.smallSession.event,
         $cache: this.ctx.cache,
+        $logger: this.ctx.logger,
         $tmpPool: cmdCtx.tmpPool,
         data: resData,
         ...iFns.fns,
@@ -78,7 +79,7 @@ export default class CmdRenderer implements BeanTypeInterface {
         rmWhitespace: true,
       },
     );
-    return code.replace(/\n\n/g, "\n");
+    return code.replace(/\n+/g, "\n");
   }
 
   rendererMap: { [key in RendererType]: Renderer } = {
@@ -170,7 +171,7 @@ export default class CmdRenderer implements BeanTypeInterface {
             clip,
             omitBackground: config.screenshotOmitBackground,
           });
-          return h.image(screenshot, "image/png");
+          return [h.image(screenshot, "image/png")];
         } finally {
           await page?.close();
         }
@@ -178,26 +179,26 @@ export default class CmdRenderer implements BeanTypeInterface {
     },
   };
 
-  handleMsgPacking(source: CmdSource, fragment: Fragment): Fragment {
-    if (!fragment) {
-      return fragment;
+  handleMsgPacking(source: CmdSource, elements: h[]): h[] {
+    if (!elements) {
+      return elements;
     }
     const msgPackingType =
       source.messagePackingType !== "inherit" ? source.messagePackingType : this.config.messagePackingType;
 
     if (!msgPackingType || msgPackingType === "none") {
-      return fragment;
+      return elements;
     }
-    if (!(fragment instanceof Array)) {
-      fragment = [fragment];
+    if (!(elements instanceof Array)) {
+      elements = [elements];
     }
-    if (msgPackingType === "multiple" && fragment.length < 2) {
-      return fragment;
+    if (msgPackingType === "multiple" && elements.length < 2) {
+      return elements;
     }
 
     const forward = h.parse("<message forward></message>");
     forward[0].children.push(
-      ...fragment.map((f) => {
+      ...elements.map((f) => {
         const message = h.parse(`<message></message>`)[0];
 
         if (typeof f === "string") {

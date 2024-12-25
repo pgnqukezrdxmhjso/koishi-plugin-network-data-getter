@@ -77,7 +77,7 @@ const cmdListRef = ref();
 const currentSourceIndex = ref(-1);
 const interval = setInterval(() => {
   currentSourceIndex.value = currentSourceNode().index;
-}, 500);
+}, 50);
 watch(currentSourceIndex, (val) => {
   if (val < 0) {
     return;

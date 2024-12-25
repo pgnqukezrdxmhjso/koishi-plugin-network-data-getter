@@ -42,6 +42,7 @@ export interface HookFn {
 
 export interface ResModified {
   type: ResModifiedType;
+  ignoreUserCall?: boolean;
 }
 
 export interface SourceExpert {
@@ -60,6 +61,7 @@ export interface SourceExpert {
   renderedMediaUrlToBase64: boolean;
   rendererRequestHeaders?: Dict<string, string>;
   resModified: ResModified;
+  disableUserCall: boolean;
   hookFns: HookFn[];
 }
 
@@ -147,6 +149,7 @@ export interface Config {
   gettingTips: boolean;
   messagePackingType: MessagePackingType;
   httpErrorShowToMsg: HttpErrorShowToMsg;
+  commandGroup: string;
   expertMode: boolean;
   expert?: ConfigExpert;
   sources: CmdSource[];
@@ -198,15 +201,6 @@ function proxyConfigSchema() {
 
 const CommonSchema = {
   inherit: Schema.const("inherit").description("繼承"),
-  ejsTemplate: Schema.string()
-    .role("textarea", { rows: [3, 9] })
-    .required()
-    .description(
-      "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)\n" +
-        "入參使用方法見專家模式中的 **_prompt**  \n" +
-        "#可額外使用  \n" +
-        "**<%=$data%>** 響應資料處理器返回的值",
-    ),
 };
 
 export const Config: Schema<Config> = Schema.intersect([
@@ -237,6 +231,7 @@ export const Config: Schema<Config> = Schema.intersect([
       ])
         .default("hide")
         .description("http報錯是否顯示在回覆訊息中"),
+      commandGroup: Schema.string().default("net-get").description("指令分組"),
       expertMode: Schema.boolean().default(false).description("專家模式"),
     }).description("基礎設定"),
     Schema.union([
@@ -310,7 +305,9 @@ export const Config: Schema<Config> = Schema.intersect([
                   "可使用的模組: 變數名  \n" +
                   "[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): crypto  \n" +
                   "[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): OTPAuth  \n" +
-                  "[http](https://koishi.chat/zh-CN/plugins/develop/http.html): http  \n",
+                  "[http](https://koishi.chat/zh-CN/plugins/develop/http.html): http  \n" +
+                  "[資料快取服務](https://cache.koishi.chat/zh-CN/): cache  \n" +
+                  "[輸出日誌](https://koishi.chat/zh-CN/api/utils/logger.html#%E7%B1%BB-logger): logger  \n",
               ),
           }),
         ]),
@@ -425,7 +422,16 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.union([
           Schema.object({
             sendType: Schema.const("ejs").required(),
-            ejsTemplate: CommonSchema.ejsTemplate,
+            ejsTemplate: Schema.string()
+              .role("textarea", { rows: [3, 9] })
+              .required()
+              .description(
+                "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)\n" +
+                  "此處使用的是[koishi標準元素](https://koishi.chat/zh-CN/api/message/elements.html)\n" +
+                  "入參使用方法見專家模式中的 **_prompt**  \n" +
+                  "#可額外使用  \n" +
+                  "**<%=$data%>** 響應資料處理器返回的值",
+              ),
           }),
           Schema.object({
             sendType: Schema.const("cmdLink").required(),
@@ -465,7 +471,15 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.union([
                 Schema.object({
                   rendererType: Schema.const("ejs").required(),
-                  ejsTemplate: CommonSchema.ejsTemplate,
+                  ejsTemplate: Schema.string()
+                    .role("textarea", { rows: [3, 9] })
+                    .required()
+                    .description(
+                      "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)\n" +
+                        "入參使用方法見專家模式中的 **_prompt**  \n" +
+                        "#可額外使用  \n" +
+                        "**<%=$data%>** 響應資料處理器返回的值",
+                    ),
                 }),
                 Schema.object({}),
               ]),
@@ -574,7 +588,7 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.union([
                 Schema.object({
                   scheduledTask: Schema.const(true).required(),
-                  cron: Schema.string().description("[cron 表示式](https://cron.koishi.chat/)"),
+                  cron: Schema.string().required().description("[cron 表示式](https://cron.koishi.chat/)"),
                   scheduledTaskContent: Schema.string().description(
                     "定時執行的內容，不需要在前面寫指令名稱  \n" +
                       "定時執行的指令中無法使用  \n" +
@@ -682,6 +696,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     "**<%=$e.路徑%>** 插入 [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
                     "**<%=$tmpPool%>** 每個請求獨立的臨時儲存，可以自由修改其中的變數  \n" +
                     "**<%=$cache%>** 呼叫 [資料快取服務](https://cache.koishi.chat/zh-CN/) 文檔中的ctx.在此處替換為$ 需要安裝cache服務  \n" +
+                    "**<%=$logger%>** 呼叫 [輸出日誌](https://koishi.chat/zh-CN/api/utils/logger.html#%E7%B1%BB-logger)  \n" +
                     "**<%= %>** 中允許使用 js程式碼 | 內建函式 | 預設常量 | 預設函式 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n" +
                     "#內建函式  \n" +
                     "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
@@ -743,7 +758,18 @@ export const Config: Schema<Config> = Schema.intersect([
                       .default("none")
                       .description("判斷響應內容是否有變化，設定後無變化的響應不會傳送訊息"),
                   }),
+                  Schema.union([
+                    ...unionOrObject("type", ["LastModified", "ETag", "resDataHash"], () => ({
+                      ignoreUserCall: Schema.boolean().default(false).description("由使用者發起的指令不進行判斷"),
+                    })),
+                    Schema.object({}),
+                  ]),
                 ]),
+              }),
+              Schema.object({
+                disableUserCall: Schema.boolean()
+                  .default(false)
+                  .description("不執行由使用者發起的指令  \n" + "以下情況除外  \n" + "訂閱推送"),
               }),
               Schema.object({
                 hookFns: Schema.array(

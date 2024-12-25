@@ -15,7 +15,7 @@ declare module "@koishijs/cache" {
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
-export type BizErrorType = "hookBlock" | "hookBlock-msg" | 'resModified';
+export type BizErrorType = "hookBlock" | "hookBlock-msg" | "resModified";
 
 export class BizError extends Error {
   type: BizErrorType;
@@ -79,6 +79,7 @@ export default class CmdCommon implements BeanTypeInterface {
     const args = {
       $e: cmdCtx.smallSession.event,
       $cache: this.ctx.cache,
+      $logger: this.ctx.logger,
       $tmpPool: cmdCtx.tmpPool,
       [iFns.arg]: iFns.fns,
       [cmdCtx.presetPool.presetConstantPoolFnArg]: cmdCtx.presetPool.presetConstantPool ?? {},

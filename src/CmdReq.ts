@@ -75,15 +75,17 @@ export default class CmdReq implements BeanTypeInterface {
     requestConfig.headers = { ...(expert.requestHeaders || {}) };
     await this.cmdCommon.formatObjOption(cmdCtx, requestConfig.headers, true);
 
-    if (expert.resModified.type === "LastModified") {
-      const val = await this.cmdCommon.cacheGet("LastModified_" + cmdCtx.source.command);
-      if (val) {
-        requestConfig.headers["If-modified-Since"] = val;
-      }
-    } else if (expert.resModified.type === "ETag") {
-      const val = await this.cmdCommon.cacheGet("ETag_" + cmdCtx.source.command);
-      if (val) {
-        requestConfig.headers["If-None-Match"] = val;
+    if (!expert.resModified.ignoreUserCall || !cmdCtx.isUserCall) {
+      if (expert.resModified.type === "LastModified") {
+        const val = await this.cmdCommon.cacheGet("LastModified_" + cmdCtx.source.command);
+        if (val) {
+          requestConfig.headers["If-modified-Since"] = val;
+        }
+      } else if (expert.resModified.type === "ETag") {
+        const val = await this.cmdCommon.cacheGet("ETag_" + cmdCtx.source.command);
+        if (val) {
+          requestConfig.headers["If-None-Match"] = val;
+        }
       }
     }
 
@@ -170,7 +172,12 @@ export default class CmdReq implements BeanTypeInterface {
     const httpClient = this.cmdHttp.getCmdHttpClient(cmdCtx.source);
     const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
 
-    if(res.status === 304 && ["LastModified", "ETag"].includes(cmdCtx.source.expert?.resModified?.type)){
+    if (
+      res.status === 304 &&
+      cmdCtx.source.expertMode &&
+      (!cmdCtx.source.expert?.resModified?.ignoreUserCall || !cmdCtx.isUserCall) &&
+      ["LastModified", "ETag"].includes(cmdCtx.source.expert?.resModified?.type)
+    ) {
       throw new BizError(cmdCtx.source.expert.resModified.type + " unmodified", "resModified");
     }
 
