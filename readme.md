@@ -202,10 +202,7 @@ jsonKey: "[].possible_answers[].action.type"
 ```json
 {
   "abc": {
-    "xyz": [
-      "foo",
-      "bar"
-    ]
+    "xyz": ["foo", "bar"]
   }
 }
 ```
@@ -259,6 +256,10 @@ ejsTemplate: |-
 - 線上分享配置頁面
 - 透過正則表示式觸發指令
 - 國際化
+
+### 0.2.15
+
+- 新增 由使用者發起的指令, 依舊直接傳送 選項
 
 ### 0.2.12
 

@@ -212,6 +212,14 @@ export default class CmdCommon implements BeanTypeInterface {
     return;
   }
 
+  debugInfo(...args: any[]) {
+    if (this.config.expertMode && this.config.expert.showDebugInfo) {
+      this.ctx.logger.info(args.shift(), ...args);
+    } else {
+      this.ctx.logger.debug(args.shift(), ...args);
+    }
+  }
+
   async cacheGet(key: string): Promise<Tables["network-data-getter"]> {
     if (this.ctx.cache) {
       return this.ctx.cache.get("network-data-getter", key);

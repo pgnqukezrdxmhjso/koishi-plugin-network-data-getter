@@ -105,6 +105,7 @@ export interface CmdSource {
 
   msgSendMode: MsgSendMode;
   msgTopic?: string;
+  msgTopicModeUserCallDirect?: boolean;
 
   httpErrorShowToMsg: SourceHttpErrorShowToMsg;
   httpErrorShowToMsgFn?: string;
@@ -561,6 +562,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 "不填寫時預設使用 net-get.指令名  \n" +
                 "使用當前指令的 --topic-on 訂閱推送 --topic-off 退訂推送",
             ),
+            msgTopicModeUserCallDirect: Schema.boolean().default(false).description("由使用者發起的指令, 依舊直接傳送"),
           }),
           Schema.object({} as any),
         ]),

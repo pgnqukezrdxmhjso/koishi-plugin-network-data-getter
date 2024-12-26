@@ -375,8 +375,8 @@ export default class CoreCmd implements BeanTypeInterface {
 
   private async runCmd(source: CmdSource, argv: Argv, isUserCall: boolean, smallSession?: SmallSession): Promise<h[]> {
     this.pluginEventEmitter.emit("cmd-action", argv);
-    this.ctx.logger.debug("args: ", argv.args);
-    this.ctx.logger.debug("options: ", argv.options);
+    this.cmdCommon.debugInfo("args: ", argv.args);
+    this.cmdCommon.debugInfo("options: ", argv.options);
 
     const topicMsg = await this.cmdTopic(source, argv);
     if (topicMsg) {
@@ -425,7 +425,7 @@ export default class CoreCmd implements BeanTypeInterface {
         } else if (e.type === "hookBlock-msg") {
           return h.parse(e.message);
         } else if (e.type === "resModified") {
-          this.ctx.logger.debug(e.message);
+          this.cmdCommon.debugInfo(e.message);
           return;
         }
       }
@@ -443,7 +443,12 @@ export default class CoreCmd implements BeanTypeInterface {
       await session.bot.deleteMessage(session.channelId, msgId);
     }
 
-    if (!isError && this.ctx.messageTopicService && source.msgSendMode === "topic") {
+    if (
+      !isError &&
+      this.ctx.messageTopicService &&
+      source.msgSendMode === "topic" &&
+      (!source.msgTopicModeUserCallDirect || !isUserCall)
+    ) {
       await this.ctx.messageTopicService.sendMessageToTopic(source.msgTopic || "net-get." + source.command, elements, {
         retractTime: source.recall > 0 ? source.recall * 60000 : undefined,
       });

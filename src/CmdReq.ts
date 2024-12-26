@@ -46,24 +46,15 @@ export default class CmdReq implements BeanTypeInterface {
     return data;
   }
 
-  debugInfo(content: string | (() => string)) {
-    if (!this.config.expertMode || !this.config.expert.showDebugInfo) {
-      return;
-    }
-    this.ctx.logger.info(typeof content === "string" ? content : content());
-  }
-
   private reqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
-    this.debugInfo(() => {
-      const rc = { ...requestConfig };
-      rc.data = this.reqDataToJson(rc.data);
-      return (
-        `cmdNetReq; ${cmdCtx.smallSession.content}\n` +
+    const rc = { ...requestConfig };
+    rc.data = this.reqDataToJson(rc.data);
+    this.cmdCommon.debugInfo(
+      `cmdNetReq; ${cmdCtx.smallSession.content}\n` +
         `url: ${url}\n` +
         `method: ${cmdCtx.source.requestMethod}\n` +
-        `config: ${JSON.stringify(rc, null, 2)}`
-      );
-    });
+        `config: ${JSON.stringify(rc, null, 2)}`,
+    );
   }
 
   private async handleReqExpert(cmdCtx: CmdCtx, requestConfig: HTTP.RequestConfig) {
@@ -181,7 +172,7 @@ export default class CmdReq implements BeanTypeInterface {
       throw new BizError(cmdCtx.source.expert.resModified.type + " unmodified", "resModified");
     }
 
-    this.debugInfo(() => `cmdNetRes; ${cmdCtx.smallSession.content}\n${JSON.stringify(res, null, 1)}`);
+    this.cmdCommon.debugInfo(`cmdNetRes; ${cmdCtx.smallSession.content}\n${JSON.stringify(res, null, 1)}`);
     return res;
   }
 }
