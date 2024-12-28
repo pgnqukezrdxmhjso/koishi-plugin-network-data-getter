@@ -11,7 +11,7 @@ import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 export type ResData = Record<any, any> | any[];
 
 type BaseProcessorMap = {
-  [key in BaseProcessorType]: (res: HTTP.Response, cmdCtx: CmdCtx) => ResData;
+  [key in BaseProcessorType]: (res: HTTP.Response, cmdCtx: CmdCtx) => Promise<ResData> | ResData;
 };
 
 export default class CmdResData implements BeanTypeInterface {
@@ -125,7 +125,7 @@ export default class CmdResData implements BeanTypeInterface {
     await this.cmdCommon.runHookFns(cmdCtx, "resDataBefore", {
       response: res,
     });
-    const resData = processor(res, cmdCtx);
+    const resData = await processor(res, cmdCtx);
     if (resData === undefined || resData === null) {
       throw "沒有獲取到資料";
     }
