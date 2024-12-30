@@ -9,7 +9,6 @@ import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 import { Config, HookFn, HookFnsType } from "./Config";
 import Strings from "./utils/Strings";
 
-// noinspection ES6UnusedImports
 import { Tables } from "@koishijs/cache";
 declare module "@koishijs/cache" {
   interface Tables {

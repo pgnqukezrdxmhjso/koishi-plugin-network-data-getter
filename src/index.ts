@@ -8,6 +8,8 @@ import {} from "koishi-plugin-umami-statistics-service";
 // noinspection ES6UnusedImports
 import {} from "koishi-plugin-message-topic-service";
 // noinspection ES6UnusedImports
+import {} from "koishi-plugin-vercel-satori-png-service";
+// noinspection ES6UnusedImports
 import {} from "koishi-plugin-cron";
 // noinspection ES6UnusedImports
 import {} from "@koishijs/cache";
@@ -21,7 +23,7 @@ import { BeanHelper } from "./utils/BeanHelper";
 
 export const inject = {
   required: ["http", "umamiStatisticsService"],
-  optional: ["cron", "cache", "puppeteer", "messageTopicService"],
+  optional: ["cron", "cache", "puppeteer", "messageTopicService", "vercelSatoriPngService"],
 };
 
 export { Config } from "./Config";
@@ -32,7 +34,8 @@ export const reusable = true;
 export const usage =
   `用法請詳閲 <a target="_blank" href="https://github.com/pgnqukezrdxmhjso/koishi-plugin-network-data-getter#koishi-plugin-network-data-getter">readme.md</a>  \n` +
   "umamiStatisticsService 服務為 umami-statistics-service 插件  \n" +
-  "messageTopicService 服務為 message-topic-service 插件";
+  "messageTopicService 服務為 message-topic-service 插件  \n" +
+  "vercelSatoriPngService 服務為 vercel-satori-png-service 插件";
 
 export interface PluginEventEmitterEventMap {
   never: never;
@@ -50,7 +53,7 @@ export function apply(ctx: Context, config: Config) {
   beanHelper.instance(CoreWeb);
   beanHelper.instance(CoreAnonymousStatistics);
 
-  beanHelper.start();
+  beanHelper.start().catch(ctx.logger.error);
 
   ctx.on("dispose", () => {
     beanHelper.destroy();

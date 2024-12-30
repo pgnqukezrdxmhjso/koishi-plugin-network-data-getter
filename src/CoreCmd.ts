@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { Argv, Command, Context, h, HTTP, Session } from "koishi";
 import { Channel, GuildMember } from "@satorijs/protocol";
 
-import { CmdSource, CommandArg, CommandOption, Config, OptionValue } from "./Config";
+import { CmdSource, CommandArg, CommandOption, Config, BaseTypeValue } from "./Config";
 import CmdRenderer from "./CmdRenderer";
 import CmdResData, { ResData } from "./CmdResData";
 import CmdCommon, { BizError } from "./CmdCommon";
@@ -23,11 +23,11 @@ declare module "./" {
 }
 
 export interface PresetPool {
-  presetConstantPool: Record<string, OptionValue>;
+  presetConstantPool: Record<string, BaseTypeValue>;
   presetFnPool: Record<string, () => void>;
 }
 
-type OptionInfoValue = OptionValue | GuildMember | Channel;
+type OptionInfoValue = BaseTypeValue | GuildMember | Channel;
 
 interface OptionInfo {
   value: OptionInfoValue;

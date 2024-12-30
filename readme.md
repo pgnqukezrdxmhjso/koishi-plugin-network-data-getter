@@ -248,14 +248,18 @@ ejsTemplate: |-
 
 ### TODO
 
-- 增加 `渲染模板系列` `Open Graph Protocol` `rss` 渲染型別
-- 渲染模板系列 `svg` `psd`
+- 增加 `Open Graph Protocol` `rss` 渲染型別
 - 渲染網路代理
 - 支援處理動態網頁
 - 自動回填預設的配置
 - 線上分享配置頁面
 - 透過正則表示式觸發指令
 - 國際化
+
+### 0.2.17
+
+- 增加 渲染型別 vercel/satori
+- 修復了一些bug
 
 ### 0.2.15
 

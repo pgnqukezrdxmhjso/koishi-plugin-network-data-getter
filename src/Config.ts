@@ -1,50 +1,44 @@
 import { Dict, HTTP, Schema } from "koishi";
-import PresetFns from "./PresetFns";
+import type { Font as VercelSatoriFont } from "satori";
 import fs from "node:fs";
 import path from "node:path";
+import PresetFns from "./PresetFns";
 
-export type BaseProcessorType = "json" | "plain" | "txt" | "html" | "resource" | "function";
-export type RendererType = "text" | "image" | "audio" | "video" | "file" | "ejs" | "cmdLink" | "puppeteer";
-export type RequestDataType = "empty" | "form-data" | "x-www-form-urlencoded" | "raw";
-export type ProxyType = "NONE" | "GLOBAL" | "MANUAL";
-export type OptionValue = boolean | string | number;
-export type CommandType = "string" | "number" | "user" | "channel" | "text";
-export type MessagePackingType = "none" | "multiple" | "all";
-export type HttpErrorShowToMsg = "hide" | "show";
-export type SourceHttpErrorShowToMsg = "inherit" | HttpErrorShowToMsg | "function";
-export type MsgSendMode = "direct" | "topic";
-export type HookFnsType = "reqDataBefore" | "reqBefore" | "resDataBefore" | "renderedBefore";
-export type ResModifiedType = "none" | "LastModified" | "ETag" | "resDataHash";
-
+export type CommandArgType = "string" | "number" | "user" | "channel" | "text";
 export interface CommandArg {
   name: string;
   desc?: string;
-  type: CommandType;
+  type: CommandArgType;
   required: boolean;
   autoOverwrite: boolean;
   overwriteKey?: string;
 }
 
+export type BaseTypeValue = boolean | string | number;
+export type CommandOptionType = "boolean" | CommandArgType;
 export interface CommandOption {
   name: string;
   acronym?: string;
   desc?: string;
-  type: "boolean" | CommandType;
-  value?: OptionValue;
+  type: CommandOptionType;
+  value?: BaseTypeValue;
   autoOverwrite: boolean;
   overwriteKey?: string;
 }
 
+export type HookFnsType = "reqDataBefore" | "reqBefore" | "resDataBefore" | "renderedBefore";
 export interface HookFn {
   type: HookFnsType;
   fn: string;
 }
 
+export type ResModifiedType = "none" | "LastModified" | "ETag" | "resDataHash";
 export interface ResModified {
   type: ResModifiedType;
   ignoreUserCall?: boolean;
 }
 
+export type RequestDataType = "empty" | "form-data" | "x-www-form-urlencoded" | "raw";
 export interface SourceExpert {
   scheduledTask: boolean;
   cron?: string;
@@ -67,7 +61,6 @@ export interface SourceExpert {
 
 export type RendererPuppeteerRendererType = "html" | "url" | "ejs";
 export type RendererPuppeteerWaitType = "selector" | "function" | "sleep";
-
 export interface RendererPuppeteer {
   rendererType: RendererPuppeteerRendererType;
   ejsTemplate?: string;
@@ -80,12 +73,38 @@ export interface RendererPuppeteer {
   screenshotOmitBackground: boolean;
 }
 
+export type RendererVercelSatoriRendererType = "ejs" | "jsx";
+export type RendererVercelSatoriEmoji = "twemoji" | "blobmoji" | "noto" | "openmoji" | "fluent" | "fluentFlat";
+export interface RendererVercelSatori {
+  rendererType: RendererVercelSatoriRendererType;
+  ejsTemplate?: string;
+  jsx?: string;
+  width: number;
+  height: number;
+  emoji: RendererVercelSatoriEmoji;
+  debug: boolean;
+}
+
+export type CmdMessagePackingType = "inherit" | MessagePackingType;
+export type MsgSendMode = "direct" | "topic";
+export type SourceHttpErrorShowToMsg = "inherit" | HttpErrorShowToMsg | "function";
+export type BaseProcessorType = "json" | "plain" | "txt" | "html" | "resource" | "function";
+export type RendererType =
+  | "text"
+  | "image"
+  | "audio"
+  | "video"
+  | "file"
+  | "ejs"
+  | "cmdLink"
+  | "puppeteer"
+  | "vercelSatori";
 export interface CmdSource {
   command: string;
   alias: string[];
   desc: string;
   reverseGettingTips?: boolean;
-  messagePackingType: "inherit" | MessagePackingType;
+  messagePackingType: CmdMessagePackingType;
   recall?: number;
   sourceUrl: string;
   requestMethod: HTTP.Method;
@@ -102,6 +121,7 @@ export interface CmdSource {
   multipleCmd?: boolean;
   cmdLink?: string;
   rendererPuppeteer?: RendererPuppeteer;
+  rendererVercelSatori?: RendererVercelSatori;
 
   msgSendMode: MsgSendMode;
   msgTopic?: string;
@@ -114,10 +134,11 @@ export interface CmdSource {
   expert?: SourceExpert;
 }
 
+export type PresetConstantType = "boolean" | "string" | "number" | "file";
 export interface PresetConstant {
   name: string;
-  type: "boolean" | "string" | "number" | "file";
-  value?: OptionValue;
+  type: PresetConstantType;
+  value?: BaseTypeValue;
 }
 
 export interface PresetFn {
@@ -127,6 +148,7 @@ export interface PresetFn {
   body: string;
 }
 
+export type ProxyType = "NONE" | "GLOBAL" | "MANUAL";
 export interface ProxyConfig {
   proxyType: ProxyType;
   proxyAgent?: string;
@@ -137,14 +159,19 @@ export interface PlatformResource extends ProxyConfig {
   name: string;
   requestHeaders: Dict<string, string>;
 }
-
+export type ConfigVercelSatoriFont = VercelSatoriFont & {
+  path: string;
+};
 export interface ConfigExpert extends ProxyConfig {
   showDebugInfo: boolean;
   platformResourceList?: PlatformResource[];
   presetConstants: PresetConstant[];
   presetFns: PresetFn[];
+  vercelSatoriFonts: ConfigVercelSatoriFont[];
 }
 
+export type MessagePackingType = "none" | "multiple" | "all";
+export type HttpErrorShowToMsg = "hide" | "show";
 export interface Config {
   anonymousStatistics: boolean;
   gettingTips: boolean;
@@ -233,35 +260,6 @@ export const Config: Schema<Config> = Schema.intersect([
         .default("hide")
         .description("http報錯是否顯示在回覆訊息中"),
       commandGroup: Schema.string().default("net-get").description("指令分組"),
-      _modules: Schema.never().description(
-        "模組名: 變數名  \n" +
-          "[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): **crypto**  \n" +
-          "[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): **OTPAuth**  \n" +
-          "[http](https://koishi.chat/zh-CN/plugins/develop/http.html): **http**  \n" +
-          "[資料快取服務](https://cache.koishi.chat/zh-CN/): **cache**  \n" +
-          "[輸出日誌](https://koishi.chat/zh-CN/api/utils/logger.html#%E7%B1%BB-logger): **logger**  \n",
-      ),
-      _internalFns: Schema.never().description(
-        "內建函式  \n" +
-          "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
-          "**await $urlToBase64({url,reqConfig})**  \n",
-      ),
-      _values: Schema.never().description(
-        "**$數字** 對應位置的引數(引數是從0開始的)  \n" +
-          "**名稱** 同名的預設常量、引數、選項  \n" +
-          "**$e.路徑** [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
-          "**$tmpPool** 每個請求獨立的臨時儲存，可以自由修改其中的變數  \n",
-      ),
-      _prompt: Schema.never().description(
-        "可使用 **_modules** 描述的內容,在此處使用需要在變數名前加 **$** 例如 **$cache.get**  \n" +
-          "可使用 **_internalFns** 描述的內容  \n" +
-          "可使用 **_values** 描述的內容  \n",
-      ),
-      _prompt2: Schema.never().description(
-        "可使用 **_prompt** 描述的內容  \n" +
-          "此處使用需要用 **<%=  %>** 包裹 例如 **<%= $cache.get %>**  \n" +
-          "**<%= %>** 中允許使用 js程式碼 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n",
-      ),
       expertMode: Schema.boolean().default(false).description("專家模式"),
     }).description("基礎設定"),
     Schema.union([
@@ -331,12 +329,67 @@ export const Config: Schema<Config> = Schema.intersect([
               .default(PresetFns)
               .collapse()
               .description("預設函式，可在後續配置中使用  \n" + "可使用 **_modules** 描述的內容  \n"),
+            vercelSatoriFonts: Schema.array(
+              Schema.object({
+                path: Schema.path()
+                  .required()
+                  .description(
+                    "字型檔案。 vercel/satori 目前支援三種字型格式：TTF、OTF、WOFF。請注意，目前不支援 WOFF2",
+                  ),
+                name: Schema.string().required(),
+                weight: Schema.union([
+                  Schema.const(100),
+                  Schema.const(200),
+                  Schema.const(300),
+                  Schema.const(400),
+                  Schema.const(500),
+                  Schema.const(600),
+                  Schema.const(700),
+                  Schema.const(800),
+                  Schema.const(900),
+                ]),
+                style: Schema.union([Schema.const("normal"), Schema.const("italic")])
+                  .default("normal")
+                  .role("radio"),
+              }),
+            ).description('vercel/satori 渲染型別 需要使用到的字型'),
           }),
         ]),
       }),
       Schema.object({} as any),
     ]),
   ]),
+  Schema.object({
+    _modules: Schema.never().description(
+      "模組名: 變數名  \n" +
+        "[node:crypto](https://nodejs.org/docs/latest/api/crypto.html): **crypto**  \n" +
+        "[TOTP](https://www.npmjs.com/package/otpauth?activeTab=readme): **OTPAuth**  \n" +
+        "[http](https://koishi.chat/zh-CN/plugins/develop/http.html): **http**  \n" +
+        "[資料快取服務](https://cache.koishi.chat/zh-CN/): **cache**  \n" +
+        "[輸出日誌](https://koishi.chat/zh-CN/api/utils/logger.html#%E7%B1%BB-logger): **logger**  \n",
+    ),
+    _internalFns: Schema.never().description(
+      "內建函式  \n" +
+        "**await $urlToString({url,reqConfig})** [reqConfig](https://github.com/cordiverse/http/blob/8a5199b143080e385108cacfe9b7e4bbe9f223ed/packages/core/src/index.ts#L98)  \n" +
+        "**await $urlToBase64({url,reqConfig})**  \n",
+    ),
+    _values: Schema.never().description(
+      "**$數字** 對應位置的引數(引數是從0開始的)  \n" +
+        "**名稱** 同名的預設常量、引數、選項  \n" +
+        "**$e.路徑** [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
+        "**$tmpPool** 每個請求獨立的臨時儲存，可以自由修改其中的變數  \n",
+    ),
+    _prompt: Schema.never().description(
+      "可使用 **_modules** 描述的內容,在此處使用需要在變數名前加 **$** 例如 **$cache.get**  \n" +
+        "可使用 **_internalFns** 描述的內容  \n" +
+        "可使用 **_values** 描述的內容  \n",
+    ),
+    _prompt2: Schema.never().description(
+      "可使用 **_prompt** 描述的內容  \n" +
+        "此處使用需要用 **<%=  %>** 包裹 例如 **<%= $cache.get %>**  \n" +
+        "**<%= %>** 中允許使用 js程式碼 例如 <%=JSON.stringify($e)%> <%=$0 || $1%>  \n",
+    ),
+  }),
   Schema.object({
     sources: Schema.array(
       Schema.intersect([
@@ -409,9 +462,10 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.const("audio").description("音訊"),
             Schema.const("video").description("影片"),
             Schema.const("file").description("檔案"),
-            Schema.const("ejs").description("EJS 模板"),
             Schema.const("cmdLink").description("指令鏈"),
-            Schema.const("puppeteer").description("html截圖"),
+            Schema.const("ejs").description("EJS 模板"),
+            Schema.const("puppeteer").description("html截圖 (速度慢，資源消耗高 需要安裝 puppeteer 插件)"),
+            Schema.const("vercelSatori").description("vercel/satori (速度快，資源消耗低 需要安裝 vercel-satori-png-service 插件)"),
           ])
             .default("text")
             .description("渲染型別"),
@@ -436,7 +490,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
             }),
           ),
-          ...unionOrObject("sendType", ["ejs", "puppeteer"], () => ({
+          ...unionOrObject("sendType", ["ejs", "puppeteer", "vercelSatori"], () => ({
             pickOneRandomly: Schema.boolean()
               .default(false)
               .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
@@ -540,6 +594,64 @@ export const Config: Schema<Config> = Schema.intersect([
                   .default("body")
                   .description("截圖目標元素 [CSS 選擇器](https://pptr.dev/guides/page-interactions#selectors)"),
                 screenshotOmitBackground: Schema.boolean().default(false).description("透明背景"),
+              }),
+            ]),
+          }),
+          Schema.object({
+            sendType: Schema.const("vercelSatori").required(),
+            rendererVercelSatori: Schema.intersect([
+              Schema.object({
+                rendererType: Schema.union([
+                  Schema.const("jsx").description("jsx"),
+                  Schema.const("ejs").description("EJS 模板"),
+                ])
+                  .default("jsx")
+                  .description("渲染型別"),
+                _explain: Schema.never().description(
+                  "vercel/satori 支援有限的 HTML 和 CSS [檢視詳情](https://github.com/vercel/satori?tab=readme-ov-file#html-elements)",
+                ),
+              }),
+              Schema.union([
+                Schema.object({
+                  rendererType: Schema.const("jsx"),
+                  jsx: Schema.string()
+                    .role("textarea", { rows: [3, 9] })
+                    .required()
+                    .description(
+                      "[vercel/satori JSX](https://github.com/vercel/satori#overview)  \n" +
+                        "可使用 **_prompt** 描述的內容  \n" +
+                        "#可額外使用  \n" +
+                        "**$data** 響應資料處理器返回的值",
+                    ),
+                }),
+                Schema.object({
+                  rendererType: Schema.const("ejs").required(),
+                  ejsTemplate: Schema.string()
+                    .role("textarea", { rows: [3, 9] })
+                    .required()
+                    .description(
+                      "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
+                        "可使用 **_prompt2** 描述的內容  \n" +
+                        "#可額外使用  \n" +
+                        "**$data** 響應資料處理器返回的值",
+                    ),
+                }),
+                Schema.object({}),
+              ]),
+              Schema.object({
+                width: Schema.number().default(1200),
+                height: Schema.number().default(630),
+                emoji: Schema.union([
+                  Schema.const("twemoji"),
+                  Schema.const("blobmoji"),
+                  Schema.const("noto"),
+                  Schema.const("openmoji"),
+                  Schema.const("fluent"),
+                  Schema.const("fluentFlat"),
+                ])
+                  .default("twemoji")
+                  .description("表情符號風格"),
+                debug: Schema.boolean().default(false).description("顯示影象上的除錯資訊"),
               }),
             ]),
           }),

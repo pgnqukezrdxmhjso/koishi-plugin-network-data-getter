@@ -1,8 +1,12 @@
-import { Context, h, Random } from "koishi";
 import { render } from "ejs";
+import path from "node:path";
+import fs from "node:fs";
+import type { Readable } from "node:stream";
+import { Context, h, Random } from "koishi";
+import type { ImageOptions } from "koishi-plugin-vercel-satori-png-service";
 
 import { CmdCtx } from "./CoreCmd";
-import { CmdSource, Config, RendererType } from "./Config";
+import type { CmdSource, Config, ConfigVercelSatoriFont, RendererType } from "./Config";
 import Strings from "./utils/Strings";
 import { ResData } from "./CmdResData";
 import CmdCommon from "./CmdCommon";
@@ -21,12 +25,33 @@ export default class CmdRenderer implements BeanTypeInterface {
   private config: Config;
   private cmdCommon: CmdCommon;
   private cmdHttp: CmdHttp;
+  private vercelSatoriFonts: ConfigVercelSatoriFont[];
 
   constructor(beanHelper: BeanHelper) {
     this.ctx = beanHelper.getByName("ctx");
     this.config = beanHelper.getByName("config");
     this.cmdCommon = beanHelper.instance(CmdCommon);
     this.cmdHttp = beanHelper.instance(CmdHttp);
+  }
+
+  start() {
+    this.initVercelSatoriFonts();
+  }
+
+  initVercelSatoriFonts() {
+    if (!this.config.expertMode || Arrays.isEmpty(this.config.expert.vercelSatoriFonts)) {
+      return;
+    }
+    const vercelSatoriFonts: ConfigVercelSatoriFont[] = [];
+    for (const vercelSatoriFont of this.config.expert.vercelSatoriFonts) {
+      const font = {
+        ...vercelSatoriFont,
+        data: fs.readFileSync(path.join(this.ctx.baseDir, vercelSatoriFont.path + "")),
+      };
+      delete font.path;
+      vercelSatoriFonts.push(font);
+    }
+    this.vercelSatoriFonts = vercelSatoriFonts;
   }
 
   private buildMedia(type: string) {
@@ -153,6 +178,32 @@ export default class CmdRenderer implements BeanTypeInterface {
         } finally {
           await page?.close();
         }
+      },
+    },
+    vercelSatori: {
+      r: async (cmdCtx, resData) => {
+        const config = cmdCtx.source.rendererVercelSatori;
+        const options: ImageOptions = {
+          width: config.width,
+          height: config.height,
+          emoji: config.emoji,
+          debug: config.debug,
+          fonts: this.vercelSatoriFonts,
+        };
+        let readable: Readable;
+        if (config.rendererType === "ejs") {
+          readable = await this.ctx.vercelSatoriPngService.htmlToPng(
+            await this.ejs(cmdCtx, resData, config.ejsTemplate),
+            options,
+          );
+        } else if (config.rendererType === "jsx") {
+          readable = await this.ctx.vercelSatoriPngService.jsxToPng(
+            config.jsx,
+            options,
+            this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
+          );
+        }
+        return [h.image((await readable.toArray())[0], "image/png")];
       },
     },
   };

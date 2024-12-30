@@ -1,7 +1,7 @@
 export interface BeanTypeInterface {
   [key: string | symbol | number]: any;
 
-  start?(): void;
+  start?(): void | Promise<void>;
 
   destroy?(): void;
 }
@@ -37,7 +37,11 @@ export class BeanHelper {
         } else if (key === "deleteProperty") {
           Reflect[key].apply(Reflect, [target, args]);
         }
-        return Reflect[key].apply(Reflect, [obj, ...args]);
+        let res = Reflect[key].apply(Reflect, [obj, ...args]);
+        if (key === "get" && typeof res === "function") {
+          res = res.bind(obj);
+        }
+        return res;
       };
     });
     return handlerMap;
@@ -75,10 +79,20 @@ export class BeanHelper {
     return classInfo.proxy;
   }
 
-  start() {
-    this.classPool.forEach((classInfo) => {
-      classInfo.proxy.start?.();
-    });
+  private touchAll() {
+    let i = 0;
+    let len = 0;
+    while (len != this.classPool.length && i++ < 99999) {
+      len = this.classPool.length;
+      this.classPool.forEach((classInfo) => classInfo?.proxy?.["__"]);
+    }
+  }
+
+  async start() {
+    this.touchAll();
+    for (const classInfo of this.classPool) {
+      await classInfo.proxy.start?.();
+    }
   }
 
   destroy() {
