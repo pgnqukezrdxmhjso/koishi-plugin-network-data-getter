@@ -1,7 +1,7 @@
 import { render } from "ejs";
 import path from "node:path";
 import fs from "node:fs";
-import type { Readable } from "node:stream";
+import type { ReactElement } from "react";
 import { Context, h, Random } from "koishi";
 import type { ImageOptions } from "koishi-plugin-vercel-satori-png-service";
 
@@ -54,6 +54,12 @@ export default class CmdRenderer implements BeanTypeInterface {
     this.vercelSatoriFonts = vercelSatoriFonts;
   }
 
+  private buildRendererRequestHeaders(cmdCtx: CmdCtx) {
+    return {
+      headers: cmdCtx.source.expertMode ? cmdCtx.source.expert.rendererRequestHeaders : undefined,
+    };
+  }
+
   private buildMedia(type: string) {
     return async (cmdCtx: CmdCtx, resData: ResData) => {
       const dataList = Objects.flatten(resData);
@@ -68,16 +74,42 @@ export default class CmdRenderer implements BeanTypeInterface {
         ) {
           elements.push(item);
         } else {
-          elements.push(
-            await this.cmdHttp.urlToBase64(cmdCtx, item, {
-              headers: cmdCtx.source.expertMode ? cmdCtx.source.expert.rendererRequestHeaders : undefined,
-            }),
-          );
+          elements.push(await this.cmdHttp.urlToBase64(cmdCtx, item, this.buildRendererRequestHeaders(cmdCtx)));
         }
       }
 
-      return h.parse(elements.map((text) => h[type](text)).join(""));
+      return h.parse(elements.map((src) => h[type](src)).join(""));
     };
+  }
+
+  private async downloadReactElementImgSrc(
+    cmdCtx: CmdCtx,
+    reactElement: ReactElement,
+    isRoot: boolean = true,
+  ): Promise<ReactElement> {
+    if (cmdCtx.source.expertMode && !cmdCtx.source.expert.renderedMediaUrlToBase64) {
+      return reactElement;
+    }
+    if (isRoot) {
+      reactElement = await Objects.clone(reactElement);
+    }
+    if (reactElement.type === "img") {
+      if (Strings.isBlank(reactElement.props.src)) {
+        return reactElement;
+      }
+      const res = await this.cmdHttp.loadUrl(cmdCtx, reactElement.props.src, this.buildRendererRequestHeaders(cmdCtx));
+      reactElement.props.src = res.data;
+      return reactElement;
+    }
+    if (!Array.isArray(reactElement.props.children)) {
+      return reactElement;
+    }
+    for (const child of reactElement.props.children) {
+      if (child?.type) {
+        await this.downloadReactElementImgSrc(cmdCtx, child, false);
+      }
+    }
+    return reactElement;
   }
 
   private async ejs(cmdCtx: CmdCtx, resData: ResData, ejsTemplate: string) {
@@ -183,6 +215,21 @@ export default class CmdRenderer implements BeanTypeInterface {
     vercelSatori: {
       r: async (cmdCtx, resData) => {
         const config = cmdCtx.source.rendererVercelSatori;
+
+        let reactElement: ReactElement;
+        if (config.rendererType === "ejs") {
+          reactElement = this.ctx.vercelSatoriPngService.htmlToReactElement(
+            await this.ejs(cmdCtx, resData, config.ejsTemplate),
+          );
+        } else if (config.rendererType === "jsx") {
+          reactElement = await this.ctx.vercelSatoriPngService.jsxToReactElement(
+            config.jsx,
+            this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
+          );
+        }
+
+        reactElement = await this.downloadReactElementImgSrc(cmdCtx, reactElement);
+
         const options: ImageOptions = {
           width: config.width,
           height: config.height,
@@ -190,19 +237,31 @@ export default class CmdRenderer implements BeanTypeInterface {
           debug: config.debug,
           fonts: this.vercelSatoriFonts,
         };
-        let readable: Readable;
-        if (config.rendererType === "ejs") {
-          readable = await this.ctx.vercelSatoriPngService.htmlToPng(
-            await this.ejs(cmdCtx, resData, config.ejsTemplate),
-            options,
-          );
-        } else if (config.rendererType === "jsx") {
-          readable = await this.ctx.vercelSatoriPngService.jsxToPng(
-            config.jsx,
-            options,
-            this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
-          );
+
+        if (!options.width) {
+          let width = reactElement.props.style.width;
+          if (width && !(width + "").trim().endsWith("%")) {
+            options.width = typeof width === "number" ? width : parseInt((width + "").replace(/\D/g, ""));
+          } else {
+            width = reactElement.props.width;
+            if (width && !(width + "").trim().endsWith("%")) {
+              options.width = typeof width === "number" ? width : parseInt((width + "").replace(/\D/g, ""));
+            }
+          }
         }
+        if (!options.height) {
+          let height = reactElement.props.style.height;
+          if (height && !(height + "").trim().endsWith("%")) {
+            options.height = typeof height === "number" ? height : parseInt((height + "").replace(/\D/g, ""));
+          } else {
+            height = reactElement.props.height;
+            if (height && !(height + "").trim().endsWith("%")) {
+              options.height = typeof height === "number" ? height : parseInt((height + "").replace(/\D/g, ""));
+            }
+          }
+        }
+
+        const readable = await this.ctx.vercelSatoriPngService.reactElementToPng(reactElement, options);
         return [h.image((await readable.toArray())[0], "image/png")];
       },
     },

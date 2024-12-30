@@ -352,7 +352,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   .default("normal")
                   .role("radio"),
               }),
-            ).description('vercel/satori 渲染型別 需要使用到的字型'),
+            ).description("vercel/satori 渲染型別 需要使用到的字型"),
           }),
         ]),
       }),
@@ -465,7 +465,9 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.const("cmdLink").description("指令鏈"),
             Schema.const("ejs").description("EJS 模板"),
             Schema.const("puppeteer").description("html截圖 (速度慢，資源消耗高 需要安裝 puppeteer 插件)"),
-            Schema.const("vercelSatori").description("vercel/satori (速度快，資源消耗低 需要安裝 vercel-satori-png-service 插件)"),
+            Schema.const("vercelSatori").description(
+              "vercel/satori (速度快，資源消耗低 需要安裝 vercel-satori-png-service 插件)",
+            ),
           ])
             .default("text")
             .description("渲染型別"),
@@ -639,8 +641,8 @@ export const Config: Schema<Config> = Schema.intersect([
                 Schema.object({}),
               ]),
               Schema.object({
-                width: Schema.number().default(1200),
-                height: Schema.number().default(630),
+                width: Schema.number(),
+                height: Schema.number(),
                 emoji: Schema.union([
                   Schema.const("twemoji"),
                   Schema.const("blobmoji"),
@@ -861,7 +863,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   .default(true)
                   .description(
                     "響應資料處理器不為資源與返回了$urlToBase64呼叫結果的自定義函式  \n" +
-                      "並且渲染型別為資源類時自動將url下載後轉base64  \n" +
+                      "並且渲染型別為 資源類、vercel/satori 時自動將url下載後轉base64  \n" +
                       "此配置可使用本插件的代理配置下載資料",
                   ),
               }),

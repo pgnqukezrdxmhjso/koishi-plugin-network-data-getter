@@ -256,6 +256,11 @@ ejsTemplate: |-
 - 透過正則表示式觸發指令
 - 國際化
 
+### 0.2.18
+
+- 渲染型別 vercel/satori 支援 renderedMediaUrlToBase64 選項
+- 渲染型別 vercel/satori 不填寫寬高的情況下自動獲取根節點的寬高
+
 ### 0.2.17
 
 - 增加 渲染型別 vercel/satori
