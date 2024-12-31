@@ -6,16 +6,17 @@ export interface BeanTypeInterface {
   destroy?(): void;
 }
 
+const BeanHelperInstanceSymbol = Symbol("BeanHelperInstance");
 export interface BeanType {
   new (beanHelper: BeanHelper): BeanTypeInterface;
 }
-
 export interface ClassInfo<T> {
   name: string;
   class: BeanType;
   instance: T;
   proxy: T;
   proxyRevoke?: () => void;
+  [BeanHelperInstanceSymbol]?: boolean;
 }
 
 export class BeanHelper {
@@ -62,6 +63,7 @@ export class BeanHelper {
       instance: null,
       proxy: null,
       proxyRevoke: null,
+      [BeanHelperInstanceSymbol]: true,
     };
 
     const handlerMap = BeanHelper.buildLazyProxyHandler(() => {
@@ -84,20 +86,28 @@ export class BeanHelper {
     let len = 0;
     while (len != this.classPool.length && i++ < 99999) {
       len = this.classPool.length;
-      this.classPool.forEach((classInfo) => classInfo?.proxy?.["__"]);
+      this.classPool.forEach((classInfo) => {
+        if (!classInfo[BeanHelperInstanceSymbol]) {
+          return;
+        }
+        return classInfo?.proxy?.["__"];
+      });
     }
   }
 
   async start() {
     this.touchAll();
     for (const classInfo of this.classPool) {
+      if (!classInfo[BeanHelperInstanceSymbol]) {
+        continue;
+      }
       await classInfo.proxy.start?.();
     }
   }
 
   destroy() {
     this.classPool.forEach((classInfo) => {
-      if (!classInfo.proxyRevoke) {
+      if (!classInfo[BeanHelperInstanceSymbol]) {
         return;
       }
       classInfo.proxy.destroy?.();

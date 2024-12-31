@@ -256,6 +256,10 @@ ejsTemplate: |-
 - 透過正則表示式觸發指令
 - 國際化
 
+### 0.2.19
+
+- 修復了一些bug
+
 ### 0.2.18
 
 - 渲染型別 vercel/satori 支援 renderedMediaUrlToBase64 選項
