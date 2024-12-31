@@ -31,19 +31,43 @@ const Objects = {
       }
     }
   },
-  async clone<T>(obj: T): Promise<T> {
-    const newObj = (Array.isArray(obj) ? [] : {}) as T;
-    await Objects.thoroughForEach(obj, async (value: any, key: string, obj: any, keys: string[]) => {
-      let tObj: any = newObj;
-      keys.forEach((key) => {
-        if (!tObj[key]) {
-          tObj[key] = Array.isArray(obj) ? [] : {};
-        }
-        tObj = tObj[key];
+  clone<T>(sourceObj: T, alreadyObjPool: Array<{ sourceObj: any; newObj: any }> = []): T {
+    const alreadyObj = alreadyObjPool.find((obj) => obj.sourceObj === sourceObj);
+    if (alreadyObj) {
+      return alreadyObj.newObj;
+    }
+    if (Array.isArray(sourceObj)) {
+      const list = [];
+      alreadyObjPool.push({
+        sourceObj: sourceObj,
+        newObj: list,
       });
-      tObj[key] = value;
-    });
-    return newObj;
+      for (const element of sourceObj) {
+        const newObj = this.clone(element, alreadyObjPool);
+        alreadyObjPool.push({
+          sourceObj: element,
+          newObj: newObj,
+        });
+        list.push(newObj);
+      }
+      return list as T;
+    } else if (sourceObj?.constructor === Object) {
+      const obj: Record<any, any> = {};
+      alreadyObjPool.push({
+        sourceObj: sourceObj,
+        newObj: obj,
+      });
+      for (const key in sourceObj) {
+        obj[key] = this.clone(sourceObj[key], alreadyObjPool);
+        alreadyObjPool.push({
+          sourceObj: sourceObj[key],
+          newObj: obj[key],
+        });
+      }
+      return obj as T;
+    } else {
+      return sourceObj;
+    }
   },
   async filter<T>(
     obj: T,
