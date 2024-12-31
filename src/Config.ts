@@ -352,7 +352,9 @@ export const Config: Schema<Config> = Schema.intersect([
                   .default("normal")
                   .role("radio"),
               }),
-            ).description("vercel/satori 渲染型別 需要使用到的字型"),
+            )
+              .collapse()
+              .description("vercel/satori 渲染型別 需要使用到的字型"),
           }),
         ]),
       }),
@@ -408,7 +410,7 @@ export const Config: Schema<Config> = Schema.intersect([
             .description("訊息合併"),
           recall: Schema.number().default(0).description("訊息撤回時限(分鐘,0為不撤回)"),
           sourceUrl: Schema.string()
-            .role("textarea", { rows: [1, 9] })
+            .role("textarea", { rows: [1, 99] })
             .description(
               "請求地址 可使用 **_prompt2** 描述的內容  \n可以不填寫，將不會發起請求。用於結合響應資料處理器-自定義函式使用",
             ),
@@ -443,7 +445,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             dataType: Schema.const("function").required(),
             dataFunction: Schema.string()
-              .role("textarea", { rows: [3, 9] })
+              .role("textarea", { rows: [3, 99] })
               .default("return $response.data")
               .description(
                 "**return** 返回的值將會傳遞給渲染器 返回非[]與{}的型別將會自動包裹[]  \n" +
@@ -502,7 +504,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             sendType: Schema.const("ejs").required(),
             ejsTemplate: Schema.string()
-              .role("textarea", { rows: [3, 9] })
+              .role("textarea", { rows: [3, 99] })
               .required()
               .description(
                 "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
@@ -518,7 +520,7 @@ export const Config: Schema<Config> = Schema.intersect([
               .default(false)
               .description("開啟後支援每行寫一條指令，但是失去一條指令內換行的功能"),
             cmdLink: Schema.string()
-              .role("textarea", { rows: [2, 9] })
+              .role("textarea", { rows: [2, 99] })
               .required()
               .description(
                 "指令鏈  \n" +
@@ -549,7 +551,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 Schema.object({
                   rendererType: Schema.const("ejs").required(),
                   ejsTemplate: Schema.string()
-                    .role("textarea", { rows: [3, 9] })
+                    .role("textarea", { rows: [3, 99] })
                     .required()
                     .description(
                       "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
@@ -580,7 +582,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 Schema.object({
                   waitType: Schema.const("function").required(),
                   waitFn: Schema.string()
-                    .role("textarea", { rows: [3, 9] })
+                    .role("textarea", { rows: [3, 99] })
                     .required()
                     .description("在頁面中執行的函式，**return true**後結束等待, 可以使用await"),
                   waitTimeout: Schema.number().default(30_000).description("超時時間"),
@@ -617,7 +619,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 Schema.object({
                   rendererType: Schema.const("jsx"),
                   jsx: Schema.string()
-                    .role("textarea", { rows: [3, 9] })
+                    .role("textarea", { rows: [3, 99] })
                     .required()
                     .description(
                       "[vercel/satori JSX](https://github.com/vercel/satori#overview)  \n" +
@@ -629,7 +631,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 Schema.object({
                   rendererType: Schema.const("ejs").required(),
                   ejsTemplate: Schema.string()
-                    .role("textarea", { rows: [3, 9] })
+                    .role("textarea", { rows: [3, 99] })
                     .required()
                     .description(
                       "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
@@ -695,7 +697,7 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             httpErrorShowToMsg: Schema.const("function").required(),
             httpErrorShowToMsgFn: Schema.string()
-              .role("textarea", { rows: [3, 9] })
+              .role("textarea", { rows: [3, 99] })
               .required()
               .description(
                 "**return** 返回的值將會加入回覆訊息中  \n" +
@@ -944,7 +946,7 @@ export const Config: Schema<Config> = Schema.intersect([
                     ]),
                     Schema.object({
                       fn: Schema.string()
-                        .role("textarea", { rows: [3, 9] })
+                        .role("textarea", { rows: [3, 99] })
                         .required(),
                     }),
                   ]),
