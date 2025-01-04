@@ -91,7 +91,7 @@ export default class CmdRenderer implements BeanTypeInterface {
       return reactElement;
     }
     if (isRoot) {
-      reactElement = await Objects.clone(reactElement);
+      reactElement = Objects.clone(reactElement);
     }
     if (reactElement.type === "img") {
       if (Strings.isBlank(reactElement.props.src)) {
@@ -110,6 +110,27 @@ export default class CmdRenderer implements BeanTypeInterface {
       }
     }
     return reactElement;
+  }
+
+  private async handleKoiShiElement(elements: h[]): Promise<h[]> {
+    await Objects.thoroughForEach(
+      elements,
+      (value) => {
+        if (value?.type === "img") {
+          value.attrs ||= {};
+          value.attrs.style ||= "";
+          value.attrs.style += (value.attrs.style ? ";" : "") + "max-width: 100%";
+        }
+      },
+      true,
+    );
+    const code = elements + "";
+    if (/[\r\n]/g.test(code)) {
+      const toString = elements.toString;
+      elements = h.parse(code.replace(/[\r\n]+/g, "<br></br" + ">".valueOf()));
+      elements.toString = toString;
+    }
+    return elements;
   }
 
   private async ejs(cmdCtx: CmdCtx, resData: ResData, ejsTemplate: string) {
@@ -133,26 +154,20 @@ export default class CmdRenderer implements BeanTypeInterface {
       },
     },
     image: {
-      r: this.buildMedia("img"),
       verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:image/"),
+      r: this.buildMedia("img"),
     },
     audio: {
-      r: this.buildMedia("audio"),
       verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:audio/"),
+      r: this.buildMedia("audio"),
     },
     video: {
-      r: this.buildMedia("video"),
       verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:video/"),
+      r: this.buildMedia("video"),
     },
     file: {
-      r: this.buildMedia("file"),
       verify: (v: any) => v.startsWith?.("http") || v.startsWith?.("data:"),
-    },
-    ejs: {
-      r: async (cmdCtx, resData) => {
-        const code = await this.ejs(cmdCtx, resData, cmdCtx.source.ejsTemplate);
-        return h.parse(code);
-      },
+      r: this.buildMedia("file"),
     },
     cmdLink: {
       r: async (cmdCtx, resData) => {
@@ -169,11 +184,32 @@ export default class CmdRenderer implements BeanTypeInterface {
         return null;
       },
     },
+    koishiElements: {
+      r: async (_, resData) => {
+        if (Array.isArray(resData)) {
+          return resData;
+        }
+        if (typeof resData === "object") {
+          return Objects.flatten(resData);
+        }
+        return [resData];
+      },
+    },
+    ejs: {
+      r: async (cmdCtx, resData) => {
+        const code = await this.ejs(cmdCtx, resData, cmdCtx.source.ejsTemplate);
+        return h.parse(code);
+      },
+    },
     puppeteer: {
       r: async (cmdCtx, resData) => {
         const page = await this.ctx.puppeteer.page();
         const config = cmdCtx.source.rendererPuppeteer;
         try {
+          if (h.isElement(resData?.[0])) {
+            resData = await this.handleKoiShiElement(resData as h[]);
+          }
+
           const obj = this.cmdCommon.buildCodeRunnerValues(cmdCtx, { data: resData });
           await page.evaluate((obj) => (window["_netGet"] = obj), obj);
           await page.evaluateOnNewDocument((obj) => (window["_netGet"] = obj), obj);
@@ -216,12 +252,20 @@ export default class CmdRenderer implements BeanTypeInterface {
       r: async (cmdCtx, resData) => {
         const config = cmdCtx.source.rendererVercelSatori;
 
+        const isElement = h.isElement(resData?.[0]);
+        if (isElement) {
+          resData = await this.handleKoiShiElement(resData as h[]);
+        }
+
         let reactElement: ReactElement;
         if (config.rendererType === "ejs") {
           reactElement = this.ctx.vercelSatoriPngService.htmlToReactElement(
             await this.ejs(cmdCtx, resData, config.ejsTemplate),
           );
         } else if (config.rendererType === "jsx") {
+          if (isElement) {
+            resData = this.ctx.vercelSatoriPngService.htmlToReactElement(resData + "") as any;
+          }
           reactElement = await this.ctx.vercelSatoriPngService.jsxToReactElement(
             config.jsx,
             this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
@@ -308,17 +352,26 @@ export default class CmdRenderer implements BeanTypeInterface {
       throw `不支援的渲染型別: ${cmdCtx.source.sendType}`;
     }
 
+    const isElement = Array.isArray(resData) && h.isElement(resData[0]);
+
     if (renderer.verify) {
       resData = await Objects.filter(resData, async (value) => renderer.verify(value));
     }
 
     if (cmdCtx.source.pickOneRandomly) {
-      resData = [Random.pick(Objects.flatten(resData))];
+      const obj = Random.pick(isElement ? (resData as h[]) : Objects.flatten(resData));
+      resData = Objects.isNull(obj) ? [] : [obj];
     }
 
     await this.cmdCommon.runHookFns(cmdCtx, "renderedBefore", {
       resData,
     });
-    return this.handleMsgPacking(cmdCtx.source, await renderer.r(cmdCtx, resData));
+    if (isElement) {
+      resData.toString = function () {
+        return (this as h[]).map((e) => e + "").join("");
+      };
+    }
+    const elements = await renderer.r(cmdCtx, resData);
+    return this.handleMsgPacking(cmdCtx.source, elements);
   }
 }

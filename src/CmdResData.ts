@@ -1,18 +1,30 @@
 import { createHash } from "node:crypto";
 import { parse } from "node-html-parser";
-import { Context, HTTP } from "koishi";
-import { BaseProcessorType, Config } from "./Config";
+import { Context, h, HTTP } from "koishi";
+import { BaseProcessorType, CmdSourceType, Config } from "./Config";
 import Objects from "./utils/Objects";
 import { CmdCtx } from "./CoreCmd";
 import Strings from "./utils/Strings";
 import CmdCommon, { BizError } from "./CmdCommon";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
+import type { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
+import type { SourceRes, SourceResFactory } from "./CmdSourceGet";
 
-export type ResData = Record<any, any> | any[];
+type BaseType = string | number | boolean;
+type BaseObj = Record<any, BaseType>;
+type BaseList = BaseType[];
+type DataType = BaseType | BaseObj | BaseList;
+export type ResData = Record<any, DataType> | DataType[] | h[];
 
 type BaseProcessorMap = {
-  [key in BaseProcessorType]: (res: HTTP.Response, cmdCtx: CmdCtx) => Promise<ResData> | ResData;
+  [key in BaseProcessorType]: {
+    sourceType: CmdSourceType[];
+    p: (sourceRes: SourceRes, cmdCtx: CmdCtx) => Promise<ResData> | ResData;
+  };
 };
+interface ExpandData {
+  response?: HTTP.Response;
+  elements?: h[];
+}
 
 export default class CmdResData implements BeanTypeInterface {
   private ctx: Context;
@@ -26,66 +38,113 @@ export default class CmdResData implements BeanTypeInterface {
   }
 
   baseProcessorMap: BaseProcessorMap = {
-    json: (res, { source }) => {
-      let data = res.data;
-      if (data instanceof ArrayBuffer) {
-        data = JSON.parse(Buffer.from(data).toString());
-      } else if (typeof data === "string") {
-        data = JSON.parse(data);
-      }
-      if (source.jsonKey) {
-        data = Objects.getValue(data, source.jsonKey.replace(/[;{}]/g, ""));
-      }
-      return data instanceof Object ? data : [data];
-    },
-    txt: (res) => {
-      const data = res.data ?? "";
-      let text: string = data;
-      if (data instanceof ArrayBuffer) {
-        text = Buffer.from(data).toString();
-      } else if (typeof data !== "string") {
+    jsonObject: {
+      sourceType: ["none"],
+      p: (_, { source }) => {
+        let data: any;
         try {
-          text = JSON.stringify(data);
-        } catch (_e) {
-          text = data.toString();
+          data = JSON.parse(source.jsonObject);
+        } catch (_e) {}
+        return data instanceof Object ? data : [source.jsonObject];
+      },
+    },
+    json: {
+      sourceType: ["url"],
+      p: (sourceRes, { source }) => {
+        let data = (sourceRes as SourceResFactory["url"]).response.data;
+        if (data instanceof ArrayBuffer) {
+          data = JSON.parse(Buffer.from(data).toString());
+        } else if (typeof data === "string") {
+          data = JSON.parse(data);
         }
-      }
-      return text.split(/[\r\n]+/).filter((s) => Strings.isNotBlank(s));
+        if (source.jsonKey) {
+          data = Objects.getValue(data, source.jsonKey.replace(/[;{}]/g, ""));
+        }
+        return data instanceof Object ? data : [data];
+      },
     },
-    html: (res, { source }) => {
-      let data = res.data;
-      if (data instanceof ArrayBuffer) {
-        data = Buffer.from(data).toString();
-      }
-      const root = parse(data);
-      return Array.from(root.querySelectorAll(source.jquerySelector ?? "p"), (e) =>
-        source.attribute ? e.getAttribute(source.attribute) : e.structuredText,
-      ).filter((s) => Strings.isNotBlank(s));
+    plain: {
+      sourceType: ["url"],
+      p: (sourceRes) => {
+        let data = (sourceRes as SourceResFactory["url"]).response.data;
+        if (data instanceof ArrayBuffer) {
+          data = JSON.parse(Buffer.from(data).toString());
+        } else if (typeof data === "string") {
+          data = JSON.parse(data);
+        }
+        return data;
+      },
     },
-    resource: (res) => {
-      return [`data:${res.headers.get("Content-Type")};base64,` + Buffer.from(res.data).toString("base64")];
+    txt: {
+      sourceType: ["url"],
+      p: (sourceRes) => {
+        const data = (sourceRes as SourceResFactory["url"]).response.data ?? "";
+        let text: string = data;
+        if (data instanceof ArrayBuffer) {
+          text = Buffer.from(data).toString();
+        } else if (typeof data !== "string") {
+          try {
+            text = JSON.stringify(data);
+          } catch (_e) {
+            text = data.toString();
+          }
+        }
+        return text.split(/[\r\n]+/).filter((s) => Strings.isNotBlank(s));
+      },
     },
-    plain: (res) => {
-      let data = res.data;
-      if (data instanceof ArrayBuffer) {
-        data = JSON.parse(Buffer.from(data).toString());
-      } else if (typeof data === "string") {
-        data = JSON.parse(data);
-      }
-      return data;
+    html: {
+      sourceType: ["url"],
+      p: (sourceRes, { source }) => {
+        let data = (sourceRes as SourceResFactory["url"]).response.data;
+        if (data instanceof ArrayBuffer) {
+          data = Buffer.from(data).toString();
+        }
+        const root = parse(data);
+        return Array.from(root.querySelectorAll(source.jquerySelector ?? "p"), (e) =>
+          source.attribute ? e.getAttribute(source.attribute) : e.structuredText,
+        ).filter((s) => Strings.isNotBlank(s));
+      },
     },
-    function: async (res, cmdCtx) => {
-      if (Strings.isBlank(cmdCtx.source.dataFunction)) {
-        return;
-      }
-      const data = await this.cmdCommon.generateCodeRunner(cmdCtx, true, {
-        response: res,
-      })(cmdCtx.source.dataFunction);
-      return data instanceof Object ? data : [data];
+    resource: {
+      sourceType: ["url"],
+      p: (sourceRes) => {
+        const res = (sourceRes as SourceResFactory["url"]).response;
+        return [`data:${res.headers.get("Content-Type")};base64,` + Buffer.from(res.data).toString("base64")];
+      },
+    },
+    koishiElements: {
+      sourceType: ["cmd"],
+      p: (sourceRes) => {
+        return (sourceRes as SourceResFactory["cmd"]).elements;
+      },
+    },
+    function: {
+      sourceType: ["none", "url", "cmd"],
+      p: async (sourceRes, cmdCtx) => {
+        if (Strings.isBlank(cmdCtx.source.dataFunction)) {
+          return;
+        }
+        const data = await this.cmdCommon.generateCodeRunner(
+          cmdCtx,
+          true,
+          this.buildExpandData(sourceRes),
+        )(cmdCtx.source.dataFunction);
+        return data instanceof Object ? data : [data];
+      },
     },
   };
 
-  async handleResModified(cmdCtx: CmdCtx, res: HTTP.Response, resData: ResData) {
+  private buildExpandData(sourceRes: SourceRes) {
+    const expandData: ExpandData = {};
+    if (sourceRes.type === "url") {
+      expandData.response = sourceRes.response;
+    } else if (sourceRes.type === "cmd") {
+      expandData.elements = sourceRes.elements;
+    }
+    return expandData;
+  }
+
+  async handleResModified(cmdCtx: CmdCtx, sourceRes: SourceRes, resData: ResData) {
     const type = cmdCtx.source.expert?.resModified.type;
     if (
       !cmdCtx.source.expertMode ||
@@ -95,17 +154,20 @@ export default class CmdResData implements BeanTypeInterface {
     ) {
       return;
     }
-    if (type === "LastModified") {
-      const val = res.headers.get("Last-Modified");
-      if (val) {
-        await this.cmdCommon.cacheSet("LastModified_" + cmdCtx.source.command, val);
+    if (sourceRes.type === "url") {
+      if (type === "LastModified") {
+        const val = sourceRes.response.headers.get("Last-Modified");
+        if (val) {
+          await this.cmdCommon.cacheSet("LastModified_" + cmdCtx.source.command, val);
+        }
+      } else if (type === "ETag") {
+        const val = sourceRes.response.headers.get("ETag");
+        if (val) {
+          await this.cmdCommon.cacheSet("ETag_" + cmdCtx.source.command, val);
+        }
       }
-    } else if (type === "ETag") {
-      const val = res.headers.get("ETag");
-      if (val) {
-        await this.cmdCommon.cacheSet("ETag_" + cmdCtx.source.command, val);
-      }
-    } else if (type === "resDataHash") {
+    }
+    if (type === "resDataHash") {
       const cacheHash = await this.cmdCommon.cacheGet("resDataHash_" + cmdCtx.source.command);
       const hash = createHash("md5");
       hash.update(JSON.stringify(resData));
@@ -117,19 +179,20 @@ export default class CmdResData implements BeanTypeInterface {
     }
   }
 
-  async cmdResData(cmdCtx: CmdCtx, res: HTTP.Response): Promise<ResData> {
+  async cmdResData(cmdCtx: CmdCtx, sourceRes: SourceRes): Promise<ResData> {
     const processor = this.baseProcessorMap[cmdCtx.source.dataType];
     if (!processor) {
       throw new Error(`未知的響應資料處理器: ${cmdCtx.source.dataType}`);
     }
-    await this.cmdCommon.runHookFns(cmdCtx, "resDataBefore", {
-      response: res,
-    });
-    const resData = await processor(res, cmdCtx);
+    await this.cmdCommon.runHookFns(cmdCtx, "resDataBefore", this.buildExpandData(sourceRes));
+    if (!processor.sourceType.includes(cmdCtx.source.sourceType)) {
+      throw cmdCtx.source.dataType + " 處理器無法處理來源型別 " + cmdCtx.source.sourceType;
+    }
+    const resData = await processor.p(sourceRes, cmdCtx);
     if (resData === undefined || resData === null) {
       throw "沒有獲取到資料";
     }
-    await this.handleResModified(cmdCtx, res, resData);
+    await this.handleResModified(cmdCtx, sourceRes, resData);
     return resData;
   }
 }

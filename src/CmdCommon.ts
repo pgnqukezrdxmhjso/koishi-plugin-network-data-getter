@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import * as OTPAuth from "otpauth";
-import { Context, HTTP } from "koishi";
+import { Context, h, HTTP } from "koishi";
 
 import { CmdCtx } from "./CoreCmd";
 import CmdHttp from "./CmdHttp";
@@ -10,6 +10,7 @@ import { Config, HookFn, HookFnsType } from "./Config";
 import Strings from "./utils/Strings";
 
 import { Tables } from "@koishijs/cache";
+
 declare module "@koishijs/cache" {
   interface Tables {
     "network-data-getter": any;
@@ -231,5 +232,23 @@ export default class CmdCommon implements BeanTypeInterface {
       await this.ctx.cache.set("network-data-getter", key, value);
     }
     this.cache[key] = value;
+  }
+
+  cutElementsToFirstText(elements: h[]) {
+    elements = [...elements];
+    const firstTextIndex = elements.findIndex((ele) => ele.type === "text");
+    if (firstTextIndex > 0) {
+      elements.splice(0, firstTextIndex);
+    }
+    return elements;
+  }
+
+  getCmdByElements(prefix: string[], elements: h[]): string {
+    elements = this.cutElementsToFirstText(elements);
+    let cmd: string = elements[0].attrs["content"]?.trim() + "";
+    prefix?.forEach((p: string) => {
+      cmd = cmd.replace(new RegExp("^" + p), "").trim();
+    });
+    return cmd.split(/\s/)[0];
   }
 }

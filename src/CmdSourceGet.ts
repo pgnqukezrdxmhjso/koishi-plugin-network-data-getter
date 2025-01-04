@@ -1,7 +1,9 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import { Context, HTTP } from "koishi";
+import { Context, h, HTTP } from "koishi";
+import { SendOptions } from "@satorijs/protocol";
+
 import Strings from "./utils/Strings";
 import Objects from "./utils/Objects";
 import Files from "./utils/Files";
@@ -9,9 +11,24 @@ import { CmdCtx } from "./CoreCmd";
 import CmdCommon, { BizError } from "./CmdCommon";
 import CmdHttp from "./CmdHttp";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
-import { Config } from "./Config";
+import { CmdSourceType, Config } from "./Config";
 
-export default class CmdReq implements BeanTypeInterface {
+export type SourceResFactory = {
+  [Type in CmdSourceType]: {
+    type: Type;
+  } & {
+    none: unknown;
+    url: {
+      response: HTTP.Response;
+    };
+    cmd: {
+      elements: h[];
+    };
+  }[Type];
+};
+export type SourceRes = SourceResFactory[CmdSourceType];
+
+export default class CmdSourceGet implements BeanTypeInterface {
   private ctx: Context;
   private config: Config;
   private cmdCommon: CmdCommon;
@@ -24,7 +41,11 @@ export default class CmdReq implements BeanTypeInterface {
     this.cmdHttp = beanHelper.instance(CmdHttp);
   }
 
-  private reqDataToJson(data: any) {
+  start(): void | Promise<void> {
+    this.initCmdReqHook();
+  }
+
+  private urlReqDataToJson(data: any) {
     if (!data) {
       return data;
     }
@@ -46,9 +67,9 @@ export default class CmdReq implements BeanTypeInterface {
     return data;
   }
 
-  private reqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
+  private urlReqLog(cmdCtx: CmdCtx, url: string, requestConfig: HTTP.RequestConfig) {
     const rc = { ...requestConfig };
-    rc.data = this.reqDataToJson(rc.data);
+    rc.data = this.urlReqDataToJson(rc.data);
     this.cmdCommon.debugInfo(
       `cmdNetReq; ${cmdCtx.smallSession.content}\n` +
         `url: ${url}\n` +
@@ -57,7 +78,7 @@ export default class CmdReq implements BeanTypeInterface {
     );
   }
 
-  private async handleReqExpert(cmdCtx: CmdCtx, requestConfig: HTTP.RequestConfig) {
+  private async handleUrlReqExpert(cmdCtx: CmdCtx, requestConfig: HTTP.RequestConfig) {
     const expert = cmdCtx.source.expert;
     if (!cmdCtx.source.expertMode || !expert) {
       return;
@@ -146,20 +167,16 @@ export default class CmdReq implements BeanTypeInterface {
     }
   }
 
-  async cmdReq(cmdCtx: CmdCtx) {
-    if (Strings.isBlank(cmdCtx.source.sourceUrl)) {
-      return null;
-    }
+  private async urlReq(cmdCtx: CmdCtx): Promise<HTTP.Response> {
     const requestConfig: HTTP.RequestConfig = {};
-    await this.cmdCommon.runHookFns(cmdCtx, "reqDataBefore");
     const url = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.sourceUrl);
-    await this.handleReqExpert(cmdCtx, requestConfig);
+    await this.handleUrlReqExpert(cmdCtx, requestConfig);
 
-    await this.cmdCommon.runHookFns(cmdCtx, "reqBefore", {
+    await this.cmdCommon.runHookFns(cmdCtx, "urlReqBefore", {
       url,
       requestConfig,
     });
-    this.reqLog(cmdCtx, url, requestConfig);
+    this.urlReqLog(cmdCtx, url, requestConfig);
     const httpClient = this.cmdHttp.getCmdHttpClient(cmdCtx.source);
     const res: HTTP.Response = await httpClient(cmdCtx.source.requestMethod, url, requestConfig);
 
@@ -174,5 +191,70 @@ export default class CmdReq implements BeanTypeInterface {
 
     this.cmdCommon.debugInfo(`cmdNetRes; ${cmdCtx.smallSession.content}\n${JSON.stringify(res, null, 1)}`);
     return res;
+  }
+
+  private cmdReqExecutePool: Record<string, { elements: h[]; lastCmd?: string }> = {};
+
+  private initCmdReqHook() {
+    this.ctx.on(
+      "before-send",
+      async (session, options: SendOptions) => {
+        const cmd = this.cmdCommon.getCmdByElements(options.session.app.config.prefix, options.session.elements);
+        if (Strings.isBlank(cmd)) {
+          return;
+        }
+        const cmdObj = this.cmdReqExecutePool[options.session.id + "-" + cmd];
+        if (!cmdObj) {
+          return;
+        }
+        const currentCmd = this.cmdCommon.getCmdByElements(session.app.config.prefix, session.elements);
+        if (cmdObj.lastCmd && cmdObj.lastCmd !== currentCmd) {
+          cmdObj.elements.push(h("br"));
+        }
+        cmdObj.lastCmd = currentCmd;
+        cmdObj.elements.push(...session.elements);
+        return true;
+      },
+      true,
+    );
+  }
+
+  private async cmdReq(cmdCtx: CmdCtx): Promise<h[]> {
+    let cmdList: string[] = [await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.sourceCmd)];
+    if (cmdCtx.source.sourceMultipleCmd) {
+      cmdList = cmdList[0].split(/[\r\n]/g);
+    }
+    const elements = [];
+    const key = cmdCtx.smallSession.session.id + "-" + cmdCtx.source.command;
+    this.cmdReqExecutePool[key] = {
+      elements,
+    };
+    for (const cmd of cmdList) {
+      await cmdCtx.smallSession.execute(cmd);
+    }
+    delete this.cmdReqExecutePool[key];
+    return elements;
+  }
+
+  async get(cmdCtx: CmdCtx): Promise<SourceRes> {
+    await this.cmdCommon.runHookFns(cmdCtx, "SourceGetBefore");
+    const sourceType = cmdCtx.source.sourceType;
+    if (sourceType === "none") {
+      return {
+        type: sourceType,
+      };
+    }
+    if (sourceType === "url") {
+      return {
+        type: sourceType,
+        response: await this.urlReq(cmdCtx),
+      };
+    }
+    if (sourceType === "cmd") {
+      return {
+        type: sourceType,
+        elements: await this.cmdReq(cmdCtx),
+      };
+    }
   }
 }

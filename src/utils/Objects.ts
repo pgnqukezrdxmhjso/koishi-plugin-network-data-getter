@@ -15,7 +15,8 @@ const Objects = {
   },
   async thoroughForEach(
     obj: any,
-    fn: (value: any, key: string, obj: any, keys: string[], root: any) => Promise<void>,
+    fn: (value: any, key: string, obj: any, keys: string[], root: any) => Promise<void> | void,
+    all: boolean = false,
     keys: string[] = [],
     root?: any,
   ) {
@@ -23,9 +24,15 @@ const Objects = {
       root = obj;
     }
     for (const key in obj) {
+      if(!Object.prototype.hasOwnProperty.call(obj, key)) {
+        continue
+      }
       const value = obj[key];
       if (value instanceof Object) {
-        await Objects.thoroughForEach(value, fn, [...keys, key], root);
+        if (all) {
+          await fn(value, key, obj, keys, root);
+        }
+        await Objects.thoroughForEach(value, fn, all, [...keys, key], root);
       } else {
         await fn(value, key, obj, keys, root);
       }
@@ -76,7 +83,7 @@ const Objects = {
     root?: any,
   ): Promise<T> {
     if (!root) {
-      root = await Objects.clone(obj);
+      root = Objects.clone(obj);
       obj = root;
     }
     for (const key in obj) {

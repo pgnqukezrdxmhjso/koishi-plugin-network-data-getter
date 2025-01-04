@@ -8,7 +8,7 @@ import { CmdSource, CommandArg, CommandOption, Config, BaseTypeValue } from "./C
 import CmdRenderer from "./CmdRenderer";
 import CmdResData, { ResData } from "./CmdResData";
 import CmdCommon, { BizError } from "./CmdCommon";
-import CmdReq from "./CmdReq";
+import CmdSourceGet, { SourceRes } from "./CmdSourceGet";
 import Arrays from "./utils/Arrays";
 import Strings from "./utils/Strings";
 import { PluginEventEmitter } from "./index";
@@ -47,6 +47,7 @@ export interface SmallSession {
   event: Session["event"];
   content: Session["content"];
   execute: Session["execute"];
+  session: Session;
 }
 
 export interface CmdCtx {
@@ -64,7 +65,7 @@ export default class CoreCmd implements BeanTypeInterface {
   private ctx: Context;
   private config: Config;
   private pluginEventEmitter: PluginEventEmitter;
-  private cmdReq: CmdReq;
+  private cmdSourceGet: CmdSourceGet;
   private cmdResData: CmdResData;
   private cmdRenderer: CmdRenderer;
   private cmdCommon: CmdCommon;
@@ -79,7 +80,7 @@ export default class CoreCmd implements BeanTypeInterface {
     this.ctx = beanHelper.getByName("ctx");
     this.config = beanHelper.getByName("config");
     this.pluginEventEmitter = beanHelper.getByName("pluginEventEmitter");
-    this.cmdReq = beanHelper.instance(CmdReq);
+    this.cmdSourceGet = beanHelper.instance(CmdSourceGet);
     this.cmdResData = beanHelper.instance(CmdResData);
     this.cmdRenderer = beanHelper.instance(CmdRenderer);
     this.cmdCommon = beanHelper.instance(CmdCommon);
@@ -155,19 +156,11 @@ export default class CoreCmd implements BeanTypeInterface {
         if (!session.quote) {
           return;
         }
-        const elements = [...session.elements];
-        const firstTextIndex = elements.findIndex((ele) => ele.type === "text");
-        if (firstTextIndex > 0) {
-          elements.splice(0, firstTextIndex);
-        }
-        let cmd: string = elements[0].attrs["content"]?.trim() + "";
-        session.app.config.prefix?.forEach((p: string) => {
-          cmd = cmd.replace(new RegExp("^" + p), "").trim();
-        });
-        const prefix = cmd.split(/\s/)[0];
+        const prefix = this.cmdCommon.getCmdByElements(session.app.config.prefix, session.elements);
         if (!this.allCmdName.has(prefix)) {
           return;
         }
+        const elements = this.cmdCommon.cutElementsToFirstText(session.elements);
         elements.push(...session.quote.elements);
         delete session.event.message.quote;
         const lastIndex = elements.length - 1;
@@ -250,6 +243,9 @@ export default class CoreCmd implements BeanTypeInterface {
       if (source.msgSendMode === "topic") {
         command.option("topic", "--topic-on 訂閱推送", { value: true });
         command.option("topic", "--topic-off 退訂推送", { value: false });
+        this.ctx?.messageTopicService
+          ?.registerTopic(source.msgTopic || "net-get." + source.command)
+          .catch(this.ctx.logger.error);
       }
     });
   }
@@ -399,6 +395,7 @@ export default class CoreCmd implements BeanTypeInterface {
         event: session?.event,
         content: session?.content,
         execute: session?.execute.bind(session),
+        session,
       };
     }
 
@@ -414,8 +411,8 @@ export default class CoreCmd implements BeanTypeInterface {
     let isError: boolean = false;
     try {
       cmdCtx.optionInfoMap = await this.handleOptionInfos(source, argv);
-      const res: HTTP.Response = await this.cmdReq.cmdReq(cmdCtx);
-      const resData: ResData = await this.cmdResData.cmdResData(cmdCtx, res);
+      const sourceRes: SourceRes = await this.cmdSourceGet.get(cmdCtx);
+      const resData: ResData = await this.cmdResData.cmdResData(cmdCtx, sourceRes);
       elements = await this.cmdRenderer.rendered(cmdCtx, resData);
     } catch (e) {
       if (e instanceof BizError) {
@@ -436,7 +433,7 @@ export default class CoreCmd implements BeanTypeInterface {
       }
     }
 
-    if (!elements) {
+    if (Arrays.isEmpty(elements)) {
       return;
     }
     if (msgId) {
@@ -458,7 +455,7 @@ export default class CoreCmd implements BeanTypeInterface {
       return elements;
     }
     const msgIds: string[] = await session.send(elements);
-    if (source.recall > 0) {
+    if (source.recall > 0 && Arrays.isNotEmpty(msgIds)) {
       this.ctx.setTimeout(
         () => msgIds.forEach((mId: string) => session.bot.deleteMessage(session.channelId, mId)),
         source.recall * 60000,
@@ -469,7 +466,7 @@ export default class CoreCmd implements BeanTypeInterface {
   private registerTask() {
     const registerList: CmdSource[] = this.config.sources.filter((source) => {
       const expert = source.expert;
-      if (!expert?.scheduledTask || Strings.isBlank(expert.cron)) {
+      if (!expert?.scheduledTask || Strings.isBlank(expert.cron) || source.sourceType === "cmd") {
         return false;
       }
       const refuseText = source.command + " 指令, 註冊定時執行失敗: ";
@@ -520,6 +517,7 @@ export default class CoreCmd implements BeanTypeInterface {
       },
       content: argv.source,
       execute: null,
+      session: null,
     });
     if (elements) {
       this.ctx.logger.info(source.command + " " + elements);
