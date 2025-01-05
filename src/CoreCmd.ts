@@ -504,7 +504,7 @@ export default class CoreCmd implements BeanTypeInterface {
     const elements = await this.runCmd(source, argv, false, {
       platform: "network-data-getter",
       event: {
-        id: Date.now(),
+        sn: Date.now(),
         type: "runTask",
         selfId: "network-data-getter",
         platform: "koishi",

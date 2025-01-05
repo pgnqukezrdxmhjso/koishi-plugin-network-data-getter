@@ -14,6 +14,7 @@ import CmdHttp from "./CmdHttp";
 import Objects from "./utils/Objects";
 import Arrays from "./utils/Arrays";
 import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
+import { getGuildMember } from "./KoishiData";
 
 type Renderer = {
   r: (cmdCtx: CmdCtx, resData: ResData) => Promise<h[]>;
@@ -112,14 +113,36 @@ export default class CmdRenderer implements BeanTypeInterface {
     return reactElement;
   }
 
-  private async handleKoiShiElement(elements: h[]): Promise<h[]> {
+  private async handleKoiShiElement(cmdCtx: CmdCtx, elements: h[]): Promise<h[]> {
     await Objects.thoroughForEach(
       elements,
-      (value) => {
+      async (value) => {
         if (value?.type === "img") {
           value.attrs ||= {};
           value.attrs.style ||= "";
           value.attrs.style += (value.attrs.style ? ";" : "") + "max-width: 100%";
+        } else if (value?.type === "at") {
+          value.type = "text";
+          if (value.attrs.type) {
+            value.attrs = { content: "@" + value.attrs.type };
+          } else if (value.attrs.role) {
+            value.attrs = { content: "@" + value.attrs.role };
+          } else if (value.attrs.name) {
+            value.attrs = { content: "@" + value.attrs.name };
+          } else if (value.attrs.id) {
+            const id = value.attrs.id;
+            let name = id;
+            if (cmdCtx.smallSession.session) {
+              const res = await getGuildMember(cmdCtx.smallSession.session, id);
+              if (res.name !== id) {
+                name = res.nick || res.name;
+              }
+            }
+            value.attrs = { content: "@" + name };
+          } else {
+            value.attrs = { content: "@?" };
+          }
+          value.attrs.content += " ";
         }
       },
       true,
@@ -207,7 +230,7 @@ export default class CmdRenderer implements BeanTypeInterface {
         const config = cmdCtx.source.rendererPuppeteer;
         try {
           if (h.isElement(resData?.[0])) {
-            resData = await this.handleKoiShiElement(resData as h[]);
+            resData = await this.handleKoiShiElement(cmdCtx, resData as h[]);
           }
 
           const obj = this.cmdCommon.buildCodeRunnerValues(cmdCtx, { data: resData });
@@ -254,7 +277,7 @@ export default class CmdRenderer implements BeanTypeInterface {
 
         const isElement = h.isElement(resData?.[0]);
         if (isElement) {
-          resData = await this.handleKoiShiElement(resData as h[]);
+          resData = await this.handleKoiShiElement(cmdCtx, resData as h[]);
         }
 
         let reactElement: ReactElement;
