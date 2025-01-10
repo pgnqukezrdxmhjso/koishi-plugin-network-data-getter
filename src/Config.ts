@@ -396,7 +396,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   Schema.const(700),
                   Schema.const(800),
                   Schema.const(900),
-                ]),
+                ]).default(400),
                 style: Schema.union([Schema.const("normal"), Schema.const("italic")])
                   .default("normal")
                   .role("radio"),

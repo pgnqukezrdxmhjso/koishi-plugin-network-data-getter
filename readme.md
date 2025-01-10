@@ -256,6 +256,11 @@ ejsTemplate: |-
 - 透過正則表示式觸發指令
 - 國際化
 
+### 0.3.3
+
+- 修復了一些bug
+
+
 ### 0.3.1
 
 - 資料來源型別 `指令` 渲染型別 `puppeteer` `vercel/satori` 將koishi標準元素`at`轉換為html元素

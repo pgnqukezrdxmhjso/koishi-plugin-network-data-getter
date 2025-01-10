@@ -199,6 +199,9 @@ export default class CmdSourceGet implements BeanTypeInterface {
     this.ctx.on(
       "before-send",
       async (session, options: SendOptions) => {
+        if (!options.session) {
+          return;
+        }
         const cmd = this.cmdCommon.getCmdByElements(options.session.app.config.prefix, options.session.elements);
         if (Strings.isBlank(cmd)) {
           return;
