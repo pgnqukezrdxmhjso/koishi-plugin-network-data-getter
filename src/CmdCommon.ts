@@ -10,6 +10,7 @@ import { Config, HookFn, HookFnsType } from "./Config";
 import Strings from "./utils/Strings";
 
 import { Tables } from "@koishijs/cache";
+import Arrays from "./utils/Arrays";
 
 declare module "@koishijs/cache" {
   interface Tables {
@@ -244,6 +245,9 @@ export default class CmdCommon implements BeanTypeInterface {
   }
 
   getCmdByElements(prefix: string[], elements: h[]): string {
+    if (Arrays.isEmpty(elements)) {
+      return "";
+    }
     elements = this.cutElementsToFirstText(elements);
     let cmd: string = elements[0].attrs["content"]?.trim() + "";
     prefix?.forEach((p: string) => {
