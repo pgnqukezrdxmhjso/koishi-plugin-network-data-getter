@@ -21,6 +21,9 @@ type Renderer = {
   verify?: (val: any) => Promise<boolean>;
 };
 
+const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
+
+
 export default class CmdRenderer implements BeanTypeInterface {
   private ctx: Context;
   private config: Config;
@@ -249,7 +252,7 @@ export default class CmdRenderer implements BeanTypeInterface {
           await page.waitForNetworkIdle();
 
           if (config.waitType === "function") {
-            await page.waitForFunction(`async ()=>{${config.waitFn}}`, {
+            await page.waitForFunction(AsyncFunction(config.waitFn) as any, {
               timeout: config.waitTimeout,
             });
           } else if (config.waitType === "selector") {
