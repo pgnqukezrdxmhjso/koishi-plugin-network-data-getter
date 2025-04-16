@@ -272,7 +272,7 @@ export default class CoreCmd implements BeanTypeInterface {
       if (Strings.isNotBlank(c)) {
         optionInfo.value = await getChannel(argv.session, c);
       }
-    } else if (/^<(img|audio|video|file)/.test(val) && !/&lt;(img|audio|video|file)/.test(argv.source)) {
+    } else if (/^<(img|audio|video|file)/.test(val) && !/&lt;(img|audio|video|file)/.test(argv.session.content)) {
       const element = h.parse(val)[0];
       const imgSrc = element.attrs["src"];
       if (Strings.isNotBlank(imgSrc)) {
