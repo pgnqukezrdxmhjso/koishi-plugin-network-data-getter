@@ -40,12 +40,13 @@ export default class CmdResData implements BeanTypeInterface {
   baseProcessorMap: BaseProcessorMap = {
     jsonObject: {
       sourceType: ["none"],
-      p: (_, { source }) => {
+      p: async (_, cmdCtx) => {
         let data: any;
+        const jsonObject = await this.cmdCommon.formatOption(cmdCtx, cmdCtx.source.jsonObject);
         try {
-          data = JSON.parse(source.jsonObject);
+          data = JSON.parse(jsonObject);
         } catch (_e) {}
-        return data instanceof Object ? data : [source.jsonObject];
+        return data instanceof Object ? data : [jsonObject];
       },
     },
     json: {
