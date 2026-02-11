@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
+
+import { h, HTTP } from "koishi";
+import { BeanHelper, Strings, Objects } from "koishi-plugin-rzgtboeyndxsklmq-commons";
+
 import { parse } from "node-html-parser";
-import { Context, h, HTTP } from "koishi";
+
 import { BaseProcessorType, CmdSourceType, Config } from "./Config";
-import Objects from "./utils/Objects";
 import { CmdCtx } from "./CoreCmd";
-import Strings from "./utils/Strings";
 import CmdCommon, { BizError } from "./CmdCommon";
-import type { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 import type { SourceRes, SourceResFactory } from "./CmdSourceGet";
 
 type BaseType = string | number | boolean;
@@ -26,16 +27,8 @@ interface ExpandData {
   elements?: h[];
 }
 
-export default class CmdResData implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private cmdCommon: CmdCommon;
-
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.cmdCommon = beanHelper.instance(CmdCommon);
-  }
+export default class CmdResData extends BeanHelper.BeanType<Config> {
+  private cmdCommon = this.beanHelper.instance(CmdCommon);
 
   baseProcessorMap: BaseProcessorMap = {
     jsonObject: {
@@ -59,7 +52,7 @@ export default class CmdResData implements BeanTypeInterface {
           data = JSON.parse(data);
         }
         if (source.jsonKey) {
-          data = Objects.getValue(data, source.jsonKey.replace(/[;{}]/g, ""));
+          data = Objects.flatten(Objects.getValuesByPath(data, source.jsonKey.replace(/[;{}]/g, "")));
         }
         return data instanceof Object ? data : [data];
       },

@@ -1,26 +1,17 @@
-import { Context, Dict, HTTP } from "koishi";
+import { Dict, HTTP } from "koishi";
+import { BeanHelper, Strings, Objects } from "koishi-plugin-rzgtboeyndxsklmq-commons";
+
 import { CmdSource, Config, PlatformResource, ProxyConfig } from "./Config";
-import Strings from "./utils/Strings";
 import { CmdCtx } from "./CoreCmd";
-import Objects from "./utils/Objects";
 import CmdCommon from "./CmdCommon";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
 interface PlatformHttpClient {
   client: HTTP;
   config?: PlatformResource;
 }
 
-export default class CmdHttp implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private cmdCommon: CmdCommon;
-
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.cmdCommon = beanHelper.instance(CmdCommon);
-  }
+export default class CmdHttp extends BeanHelper.BeanType<Config> {
+  private cmdCommon = this.beanHelper.instance(CmdCommon);
 
   private buildHttpClient(proxyConfig: ProxyConfig): HTTP {
     switch (proxyConfig.proxyType) {

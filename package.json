@@ -1,14 +1,14 @@
 {
   "name": "koishi-plugin-network-data-getter",
-  "description": "透過配置指令，請求url併傳送聊天訊息",
-  "version": "0.3.8",
+  "description": "Generate commands through configuration. Fetch info from URLs or other commands, process it, and send via various methods.",
+  "version": "1.0.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
     "build": "cd ../../ && yarn build network-data-getter",
     "pub": "cd ../../ && yarn pub network-data-getter",
-    "fastPub": "cd ../../ && yarn bump -3 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
-    "test": "node ./test/test.js"
+    "fastPub": "cd ../../ && yarn bump -1 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
+    "up": "npx npm-check -u --no-color"
   },
   "files": [
     "lib",
@@ -35,32 +35,34 @@
     "api"
   ],
   "peerDependencies": {
-    "@koishijs/plugin-console": "^5.30.2",
-    "koishi": "^4.18.5"
+    "@koishijs/plugin-console": "^5.30.11",
+    "koishi": "^4.18.10"
   },
   "dependencies": {
     "ejs": "^3.1.10",
-    "file-type": "^19.6.0",
+    "file-type": "^21.3.0",
+    "koishi-plugin-rzgtboeyndxsklmq-commons": "^1.1.0",
     "node-html-parser": "^6.1.15-0",
-    "otpauth": "^9.3.6"
+    "otpauth": "^9.4.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
+    "@eslint/js": "^9.39.2",
     "@koishijs/cache": "^2.1.0",
-    "@koishijs/client": "^5.30.2",
+    "@koishijs/client": "^5.30.11",
     "@types/ejs": "^3.1.5",
     "@types/eslint": "^9",
-    "eslint": "^9.17.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-vue": "^9.32.0",
-    "globals": "^15.14.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.7.0",
+    "globals": "^17.3.0",
     "koishi-plugin-cron": "^3.1.0",
     "koishi-plugin-message-topic-service": "^0.0.12",
     "koishi-plugin-puppeteer": "^3.9.0",
+    "koishi-plugin-to-image-service": "^1.6.2",
     "koishi-plugin-umami-statistics-service": "^0.0.7",
-    "koishi-plugin-vercel-satori-png-service": "^0.0.5",
-    "prettier": "^3.4.2",
-    "typescript-eslint": "^8.19.1-alpha.6"
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.52.1-alpha.3",
+    "vue-eslint-parser": "^10.2.0"
   },
   "koishi": {
     "service": {
@@ -73,8 +75,17 @@
         "cache",
         "puppeteer",
         "messageTopicService",
-        "vercelSatoriPngService"
+        "toImageService"
       ]
+    },
+    "description": {
+      "en-US": "Generate commands through configuration. Fetch info from URLs or other commands, process it, and send via various methods.",
+      "fr-FR": "Générer des commandes par configuration. Récupérer des infos via URL ou autres commandes, les traiter et les envoyer par divers moyens.",
+      "ja-JP": "設定によりコマンドを生成します。URLや他のコマンドから情報を取得・処理し、さまざまな方法で送信します。",
+      "ko-KR": "설정을 통해 명령어를 생성합니다. URL이나 다른 명령어로부터 정보를 가져와 처리하고, 다양한 방식으로 전송합니다.",
+      "ru-RU": "Генерация команд через конфигурацию. Получение информации из URL или других команд, ее обработка и отправка различными способами.",
+      "zh-CN": "通过配置生成指令。从URL、其他指令获取信息，处理信息，并通过多种不同的方式发送信息",
+      "zh-TW": "透過配置生成指令。從 URL 或其他指令獲取資訊、處理資訊，並透過多種不同方式傳送資訊"
     }
   }
 }

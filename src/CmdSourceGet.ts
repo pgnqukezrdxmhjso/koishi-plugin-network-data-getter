@@ -1,17 +1,15 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import { Context, h, HTTP } from "koishi";
+import { h, HTTP } from "koishi";
 import { SendOptions } from "@satorijs/protocol";
+import { BeanHelper, Strings, Objects } from "koishi-plugin-rzgtboeyndxsklmq-commons";
 
-import Strings from "./utils/Strings";
-import Objects from "./utils/Objects";
+import { CmdSourceType, Config } from "./Config";
 import Files from "./utils/Files";
 import { CmdCtx } from "./CoreCmd";
 import CmdCommon, { BizError } from "./CmdCommon";
 import CmdHttp from "./CmdHttp";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
-import { CmdSourceType, Config } from "./Config";
 
 export type SourceResFactory = {
   [Type in CmdSourceType]: {
@@ -28,18 +26,9 @@ export type SourceResFactory = {
 };
 export type SourceRes = SourceResFactory[CmdSourceType];
 
-export default class CmdSourceGet implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private cmdCommon: CmdCommon;
-  private cmdHttp: CmdHttp;
-
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.cmdCommon = beanHelper.instance(CmdCommon);
-    this.cmdHttp = beanHelper.instance(CmdHttp);
-  }
+export default class CmdSourceGet extends BeanHelper.BeanType<Config> {
+  private cmdCommon = this.beanHelper.instance(CmdCommon);
+  private cmdHttp = this.beanHelper.instance(CmdHttp);
 
   start(): void | Promise<void> {
     this.initCmdReqHook();
@@ -149,7 +138,7 @@ export default class CmdSourceGet implements BeanTypeInterface {
 
           const fileRes = await this.cmdHttp.loadUrl(cmdCtx, optionInfo.value as string, { responseType: "blob" });
 
-          form.append(oKey, fileRes.data, optionInfo.fileName || (await Files.getFileNameByBlob(fileRes.data)));
+          form.append(oKey, fileRes.data, optionInfo.fileName || (await Files.getFileHashName(fileRes.data)));
           fileOverwriteKeys.push(oKey);
         }
 

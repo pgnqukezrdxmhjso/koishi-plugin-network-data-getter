@@ -1,19 +1,17 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import { Argv, Command, Context, h, HTTP, Session } from "koishi";
+import { Argv, Command, h, HTTP, Session } from "koishi";
 import { Channel, GuildMember } from "@satorijs/protocol";
+import { BeanHelper, Strings } from "koishi-plugin-rzgtboeyndxsklmq-commons";
 
 import { CmdSource, CommandArg, CommandOption, Config, BaseTypeValue } from "./Config";
 import CmdRenderer from "./CmdRenderer";
 import CmdResData, { ResData } from "./CmdResData";
 import CmdCommon, { BizError } from "./CmdCommon";
 import CmdSourceGet, { SourceRes } from "./CmdSourceGet";
-import Arrays from "./utils/Arrays";
-import Strings from "./utils/Strings";
 import { PluginEventEmitter } from "./index";
 import { getChannel, getGuildMember } from "./KoishiData";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
 declare module "./" {
   // noinspection JSUnusedGlobalSymbols
@@ -61,30 +59,18 @@ export interface CmdCtx {
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
-export default class CoreCmd implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private pluginEventEmitter: PluginEventEmitter;
-  private cmdSourceGet: CmdSourceGet;
-  private cmdResData: CmdResData;
-  private cmdRenderer: CmdRenderer;
-  private cmdCommon: CmdCommon;
+export default class CoreCmd extends BeanHelper.BeanType<Config> {
+  private pluginEventEmitter: PluginEventEmitter = this.beanHelper.getByName("pluginEventEmitter");
+  private cmdSourceGet = this.beanHelper.instance(CmdSourceGet);
+  private cmdResData = this.beanHelper.instance(CmdResData);
+  private cmdRenderer = this.beanHelper.instance(CmdRenderer);
+  private cmdCommon = this.beanHelper.instance(CmdCommon);
   private presetPool: PresetPool = {
     presetConstantPool: {},
     presetFnPool: {},
   };
   private allCmdName: Set<string>;
   private allCommand: { [key in string]: Command };
-
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.pluginEventEmitter = beanHelper.getByName("pluginEventEmitter");
-    this.cmdSourceGet = beanHelper.instance(CmdSourceGet);
-    this.cmdResData = beanHelper.instance(CmdResData);
-    this.cmdRenderer = beanHelper.instance(CmdRenderer);
-    this.cmdCommon = beanHelper.instance(CmdCommon);
-  }
 
   start() {
     this.initPresetConstants();
@@ -97,7 +83,7 @@ export default class CoreCmd implements BeanTypeInterface {
 
   private initPresetConstants() {
     const { ctx, config, presetPool } = this;
-    if (!config.expertMode || !config.expert || Arrays.isEmpty(config.expert.presetConstants)) {
+    if (!config.expertMode || !config.expert || !config.expert.presetConstants?.length) {
       return;
     }
     config.expert.presetConstants.forEach((presetConstant) => {
@@ -118,7 +104,7 @@ export default class CoreCmd implements BeanTypeInterface {
   }
 
   private initPresetFns() {
-    if (!this.config.expertMode || !this.config.expert || Arrays.isEmpty(this.config.expert.presetFns)) {
+    if (!this.config.expertMode || !this.config.expert || !this.config.expert.presetFns?.length) {
       return;
     }
     this.config.expert.presetFns.forEach((presetFn) => {
@@ -433,7 +419,7 @@ export default class CoreCmd implements BeanTypeInterface {
       }
     }
 
-    if (Arrays.isEmpty(elements)) {
+    if (!elements?.length) {
       return;
     }
     if (msgId) {
@@ -455,7 +441,7 @@ export default class CoreCmd implements BeanTypeInterface {
       return elements;
     }
     const msgIds: string[] = await session.send(elements);
-    if (source.recall > 0 && Arrays.isNotEmpty(msgIds)) {
+    if (source.recall > 0 && msgIds?.length > 0) {
       this.ctx.setTimeout(
         () => msgIds.forEach((mId: string) => session.bot.deleteMessage(session.channelId, mId)),
         source.recall * 60000,
@@ -514,6 +500,8 @@ export default class CoreCmd implements BeanTypeInterface {
           arguments: argv.args,
           options: argv.options,
         },
+        login: null,
+        referrer: null,
       },
       content: argv.source,
       execute: null,

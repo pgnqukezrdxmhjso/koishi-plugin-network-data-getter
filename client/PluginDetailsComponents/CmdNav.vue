@@ -1,110 +1,68 @@
 <template>
-  <div :class="$style.container" :style="containerPosition">
-    <div :class="$style.head">
-      <IconMove :class="$style.move" @mousedown="startMove" @touchstart="startMove" />
-    </div>
-    <div :class="$style.scroll">
-      <div :class="$style['cmd-list']">
-        <div
-          ref="cmdListRef"
-          :class="i === currentSourceIndex ? $style.active : ''"
-          v-for="(item, i) in sources"
-          @click="toCmd(item.command)"
-          :key="item.command"
+  <DragContainer>
+    <div :class="$style.container">
+      <el-scrollbar>
+        <el-tabs
+          ref="cmdTabsRef"
+          :class="$style['cmd-list']"
+          tab-position="right"
+          v-model="activeTab"
+          @tab-click="clickTabs"
         >
-          {{ item.command }}
-        </div>
+          <el-tab-pane v-for="item in sources" :key="item.command" :label="item.command" />
+        </el-tabs>
+      </el-scrollbar>
+      <div :class="$style['turn-page']">
+        <el-button :disabled="!activeTab || +activeTab < 1" @click="turnPage()">
+          <el-icon>
+            <ArrowUpBold />
+          </el-icon>
+        </el-button>
+        <el-button :disabled="!activeTab || +activeTab + 1 >= sources.length" @click="turnPage(true)">
+          <el-icon>
+            <ArrowDownBold />
+          </el-icon>
+        </el-button>
       </div>
     </div>
-    <div :class="$style['turn-page']">
-      <el-button @click="turnPage()">☝</el-button>
-      <el-button @click="turnPage(true)">👇</el-button>
-    </div>
-  </div>
+  </DragContainer>
 </template>
 
 <script setup lang="ts">
-import { inject, reactive, onUnmounted, computed, ComputedRef, ref, watch } from "vue";
-import IconMove from "../assets/icon/IconMove.vue";
+import type { TabsPaneContext, TabsInstance, TabsProps } from "element-plus";
+import { ArrowUpBold, ArrowDownBold } from "@element-plus/icons-vue";
+import { inject, onUnmounted, computed, ComputedRef, ref, watch } from "vue";
+import DragContainer from "koishi-plugin-rzgtboeyndxsklmq-commons/vue/components/DragContainer.vue";
 import { Config } from "../../src";
-
-const containerPosition = computed(() => {
-  return {
-    top: mouseInfo.top + "px",
-    right: mouseInfo.right + "px",
-  };
-});
-const mouseInfo = reactive({
-  ing: false,
-  top: 15,
-  right: 15,
-  startTop: 0,
-  startRight: 0,
-  startX: 0,
-  startY: 0,
-});
-const onMousemove = (event: MouseEvent | TouchEvent) => {
-  if (event instanceof TouchEvent) {
-    event = event.touches[0] as any as MouseEvent;
-  }
-  if (!mouseInfo.ing) {
-    return;
-  }
-  mouseInfo.top = mouseInfo.startTop + (event.clientY - mouseInfo.startY);
-  mouseInfo.right = mouseInfo.startRight - (event.clientX - mouseInfo.startX);
-  if (mouseInfo.top < 15) {
-    mouseInfo.top = 15;
-  }
-  if (mouseInfo.right < 15) {
-    mouseInfo.right = 15;
-  }
-};
-const startMove = (event: MouseEvent | TouchEvent) => {
-  if (event instanceof TouchEvent) {
-    event = event.touches[0] as any as MouseEvent;
-  }
-  mouseInfo.startTop = mouseInfo.top;
-  mouseInfo.startRight = mouseInfo.right;
-  mouseInfo.startX = event.clientX;
-  mouseInfo.startY = event.clientY;
-  mouseInfo.ing = true;
-};
-const endMove = () => {
-  mouseInfo.ing = false;
-};
-
-const cmdListRef = ref();
-const currentSourceIndex = ref(-1);
-const interval = setInterval(() => {
-  currentSourceIndex.value = currentSourceNode().index;
-}, 50);
-watch(currentSourceIndex, (val) => {
-  if (val < 0) {
-    return;
-  }
-  cmdListRef.value?.[val]?.scrollIntoView?.({
-    behavior: "smooth",
-    block: "nearest",
-  });
-});
-
-window.addEventListener("mousemove", onMousemove);
-window.addEventListener("mouseup", endMove);
-window.addEventListener("touchmove", onMousemove);
-window.addEventListener("touchend", endMove);
-
-onUnmounted(() => {
-  clearInterval(interval);
-  window.removeEventListener("mousemove", onMousemove);
-  window.removeEventListener("mouseup", endMove);
-  window.removeEventListener("touchmove", onMousemove);
-  window.removeEventListener("touchend", endMove);
-});
 
 const current = inject<ComputedRef<{ config: Config }>>("manager.settings.current");
 const sources = computed(() => {
   return current.value?.config?.sources || [];
 });
+
+const cmdTabsRef = ref<TabsInstance>();
+const activeTab = ref<TabsProps["modelValue"]>();
+watch(activeTab, (val) => {
+  if (+val < 0) {
+    return;
+  }
+  const tabs = cmdTabsRef.value.$el as HTMLDivElement;
+  tabs?.querySelectorAll(`.el-tabs__nav .el-tabs__item`)?.[val]?.scrollIntoView?.({
+    behavior: "smooth",
+    block: "nearest",
+  });
+});
+
+const interval = setInterval(() => {
+  activeTab.value = currentSourceNode().index + "";
+}, 50);
+onUnmounted(() => {
+  clearInterval(interval);
+});
+
+const clickTabs = (pane: TabsPaneContext) => {
+  toCmd(<string>pane.props.label);
+};
 
 const toCmd = (cmd: string) => {
   const nodes = document.querySelectorAll(".k-schema-left");
@@ -154,70 +112,28 @@ const turnPage = (last = false) => {
 </script>
 
 <style module lang="scss">
-@use "../assets/common";
-
 .container {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  z-index: 999;
+  overflow: hidden;
   width: 70px;
-  max-height: 60vh;
-  background: rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
-  user-select: none;
-
-  > .head {
-    display: flex;
-    background: rgba(255, 255, 255, 0.75);
-    padding: 5px;
-    align-items: center;
-
-    .move {
-      width: 20px;
-      height: 20px;
-      cursor: grab;
-
-      &:active {
-        cursor: grabbing;
-      }
-    }
-  }
-
-  .scroll {
-    overflow-y: auto;
-    @supports (scrollbar-width: auto) {
-      & {
-        scrollbar-color: rgba(255, 255, 255, 0.6) rgba(255, 255, 255, 0.3);
-        scrollbar-width: thin;
-      }
-    }
-    @supports selector(::-webkit-scrollbar) {
-      &::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.6);
-      }
-
-      &::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.3);
-      }
-
-      &::-webkit-scrollbar {
-        max-width: 8px;
-        max-height: 8px;
-      }
-    }
-  }
+  margin: calc(var(--el-card-padding) * -1);
 
   .cmd-list {
-    > * {
-      margin-top: 1px;
-      padding: 3px 5px;
-      background: rgba(255, 255, 255, 0.55);
-      cursor: pointer;
+    :global(.el-tabs__header) {
+      width: 100%;
+      margin: 0;
+      padding-left: 1px;
+      float: revert;
     }
-    .active {
-      background: rgba(249, 210, 229, 0.55);
+    :global(.el-tabs__item) {
+      padding: 2px 5px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      border-bottom: 1px var(--el-border-color) var(--el-border-style);
+
+      --el-font-size-base: 16px;
+      --el-tabs-header-height: auto;
     }
   }
   .turn-page {

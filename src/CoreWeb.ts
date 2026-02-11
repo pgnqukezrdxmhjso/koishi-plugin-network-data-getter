@@ -1,22 +1,21 @@
-import { Context } from "koishi";
 import path from "node:path";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
+import { BeanHelper } from "koishi-plugin-rzgtboeyndxsklmq-commons";
+import { Config } from "./Config";
 
 let applyCount = 0;
-export default class CoreWeb implements BeanTypeInterface {
-  private ctx: Context;
-
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-
+export default class CoreWeb extends BeanHelper.BeanType<Config> {
+  start() {
     applyCount++;
 
     if (applyCount === 1) {
       this.ctx.inject(["console"], (ctx) => {
-        const basePath = path.join(path.parse(__filename).dir, "../");
+        let prod = path.resolve(__dirname, "../dist");
+        if (prod.includes("external") && !prod.includes("node_modules")) {
+          prod = path.join(ctx.baseDir, "node_modules/koishi-plugin-network-data-getter/dist");
+        }
         ctx.console.addEntry({
-          dev: path.join(basePath, "/client/index.ts"),
-          prod: path.join(basePath, "/dist"),
+          dev: path.resolve(__dirname, "../client/index.ts"),
+          prod,
         });
       });
     }

@@ -248,7 +248,7 @@ ejsTemplate: |-
 
 ### TODO
 
-- 增加 `Open Graph Protocol` `rss` 渲染型別
+- 增加 `Open Graph Protocol` `rss` `markdown` 渲染型別
 - 渲染網路代理
 - 支援處理動態網頁
 - 自動回填預設的配置
@@ -257,6 +257,13 @@ ejsTemplate: |-
 - 國際化
 - 指令引數支援變長引數
 - 渲染型別增加模擬koishi服務
+
+### 1.0.0
+
+- 程式碼優化
+- 將 vercelSatoriPngService 更換為 toImageService
+- 優化主控台（Console）浮動視窗程式碼
+- 暫時停用/取消 statistics-service
 
 ### 0.3.8
 

@@ -1,19 +1,14 @@
 import { render } from "ejs";
-import path from "node:path";
-import fs from "node:fs";
+import { h, Random } from "koishi";
+import type { SatoriRenderer } from "koishi-plugin-to-image-service";
+import { BeanHelper, Strings, Objects } from "koishi-plugin-rzgtboeyndxsklmq-commons";
 import type { ReactElement } from "react";
-import { Context, h, Random } from "koishi";
-import type { ImageOptions } from "koishi-plugin-vercel-satori-png-service";
 
+import type { CmdSource, Config, RendererType } from "./Config";
 import { CmdCtx } from "./CoreCmd";
-import type { CmdSource, Config, ConfigVercelSatoriFont, RendererType } from "./Config";
-import Strings from "./utils/Strings";
 import { ResData } from "./CmdResData";
 import CmdCommon from "./CmdCommon";
 import CmdHttp from "./CmdHttp";
-import Objects from "./utils/Objects";
-import Arrays from "./utils/Arrays";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 import { getGuildMember } from "./KoishiData";
 
 type Renderer = {
@@ -23,40 +18,9 @@ type Renderer = {
 
 const AsyncFunction: FunctionConstructor = (async () => 0).constructor as FunctionConstructor;
 
-
-export default class CmdRenderer implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private cmdCommon: CmdCommon;
-  private cmdHttp: CmdHttp;
-  private vercelSatoriFonts: ConfigVercelSatoriFont[];
-
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.cmdCommon = beanHelper.instance(CmdCommon);
-    this.cmdHttp = beanHelper.instance(CmdHttp);
-  }
-
-  start() {
-    this.initVercelSatoriFonts();
-  }
-
-  initVercelSatoriFonts() {
-    if (!this.config.expertMode || Arrays.isEmpty(this.config.expert.vercelSatoriFonts)) {
-      return;
-    }
-    const vercelSatoriFonts: ConfigVercelSatoriFont[] = [];
-    for (const vercelSatoriFont of this.config.expert.vercelSatoriFonts) {
-      const font = {
-        ...vercelSatoriFont,
-        data: fs.readFileSync(path.join(this.ctx.baseDir, vercelSatoriFont.path + "")),
-      };
-      delete font.path;
-      vercelSatoriFonts.push(font);
-    }
-    this.vercelSatoriFonts = vercelSatoriFonts;
-  }
+export default class CmdRenderer extends BeanHelper.BeanType<Config> {
+  private cmdCommon = this.beanHelper.instance(CmdCommon);
+  private cmdHttp = this.beanHelper.instance(CmdHttp);
 
   private buildRendererRequestHeaders(cmdCtx: CmdCtx) {
     return {
@@ -67,7 +31,7 @@ export default class CmdRenderer implements BeanTypeInterface {
   private buildMedia(type: string) {
     return async (cmdCtx: CmdCtx, resData: ResData) => {
       const dataList = Objects.flatten(resData);
-      if (Arrays.isEmpty(dataList)) {
+      if (!dataList?.length) {
         throw "沒有符合條件的結果";
       }
       const elements = [];
@@ -95,7 +59,7 @@ export default class CmdRenderer implements BeanTypeInterface {
       return reactElement;
     }
     if (isRoot) {
-      reactElement = Objects.clone(reactElement);
+      reactElement = await Objects.clone(reactElement);
     }
     if (reactElement.type === "img") {
       if (Strings.isBlank(reactElement.props.src)) {
@@ -285,14 +249,14 @@ export default class CmdRenderer implements BeanTypeInterface {
 
         let reactElement: ReactElement;
         if (config.rendererType === "ejs") {
-          reactElement = this.ctx.vercelSatoriPngService.htmlToReactElement(
+          reactElement = this.ctx.toImageService.toReactElement.htmlToReactElement(
             await this.ejs(cmdCtx, resData, config.ejsTemplate),
           );
         } else if (config.rendererType === "jsx") {
           if (isElement) {
-            resData = this.ctx.vercelSatoriPngService.htmlToReactElement(resData + "") as any;
+            resData = this.ctx.toImageService.toReactElement.htmlToReactElement(resData + "") as any;
           }
-          reactElement = await this.ctx.vercelSatoriPngService.jsxToReactElement(
+          reactElement = await this.ctx.toImageService.toReactElement.jsxToReactElement(
             config.jsx,
             this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
           );
@@ -300,12 +264,11 @@ export default class CmdRenderer implements BeanTypeInterface {
 
         reactElement = await this.downloadReactElementImgSrc(cmdCtx, reactElement);
 
-        const options: ImageOptions = {
+        const options: SatoriRenderer.VercelSatoriOptions = {
           width: config.width,
           height: config.height,
           emoji: config.emoji,
           debug: config.debug,
-          fonts: this.vercelSatoriFonts,
         };
 
         if (!options.width) {
@@ -331,8 +294,11 @@ export default class CmdRenderer implements BeanTypeInterface {
           }
         }
 
-        const readable = await this.ctx.vercelSatoriPngService.reactElementToPng(reactElement, options);
-        return [h.image((await readable.toArray())[0], "image/png")];
+        const svg = await this.ctx.toImageService.satoriRenderer.render({ reactElement, options });
+        const img = await this.ctx.toImageService.resvgRenderer.render({
+          svg,
+        });
+        return [h.image(img, "image/png")];
       },
     },
   };
@@ -381,7 +347,7 @@ export default class CmdRenderer implements BeanTypeInterface {
     const isElement = Array.isArray(resData) && h.isElement(resData[0]);
 
     if (renderer.verify) {
-      resData = await Objects.filter(resData, async (value) => renderer.verify(value));
+      resData = await Objects.clone(resData, async (value) => renderer.verify(value));
     }
 
     if (cmdCtx.source.pickOneRandomly) {

@@ -1,5 +1,4 @@
 import { Dict, HTTP, Schema } from "koishi";
-import type { Font as VercelSatoriFont } from "satori";
 import fs from "node:fs";
 import path from "node:path";
 import PresetFns from "./PresetFns";
@@ -174,15 +173,12 @@ export interface PlatformResource extends ProxyConfig {
   name: string;
   requestHeaders: Dict<string, string>;
 }
-export type ConfigVercelSatoriFont = VercelSatoriFont & {
-  path: string;
-};
+
 export interface ConfigExpert extends ProxyConfig {
   showDebugInfo: boolean;
   platformResourceList?: PlatformResource[];
   presetConstants: PresetConstant[];
   presetFns: PresetFn[];
-  vercelSatoriFonts: ConfigVercelSatoriFont[];
 }
 
 export type MessagePackingType = "none" | "multiple" | "all";
@@ -378,32 +374,6 @@ export const Config: Schema<Config> = Schema.intersect([
               .default(PresetFns)
               .collapse()
               .description("預設函式，可在後續配置中使用  \n" + "可使用 **_modules** 描述的內容  \n"),
-            vercelSatoriFonts: Schema.array(
-              Schema.object({
-                path: Schema.path()
-                  .required()
-                  .description(
-                    "字型檔案。 vercel/satori 目前支援三種字型格式：TTF、OTF、WOFF。請注意，目前不支援 WOFF2",
-                  ),
-                name: Schema.string().required(),
-                weight: Schema.union([
-                  Schema.const(100),
-                  Schema.const(200),
-                  Schema.const(300),
-                  Schema.const(400),
-                  Schema.const(500),
-                  Schema.const(600),
-                  Schema.const(700),
-                  Schema.const(800),
-                  Schema.const(900),
-                ]).default(400),
-                style: Schema.union([Schema.const("normal"), Schema.const("italic")])
-                  .default("normal")
-                  .role("radio"),
-              }),
-            )
-              .collapse()
-              .description("vercel/satori 渲染型別 需要使用到的字型"),
           }),
         ]),
       }),
@@ -427,7 +397,7 @@ export const Config: Schema<Config> = Schema.intersect([
     _values: Schema.never().description(
       "**$數字** 對應位置的引數(引數是從0開始的)  \n" +
         "**名稱** 同名的預設常量、引數、選項  \n" +
-        "**$e.路徑** [事件資料](https://satori.js.org/zh-CN/protocol/events.html#event)  \n" +
+        "**$e.路徑** [事件資料](https://satori.chat/zh-CN/protocol/events.html#event)  \n" +
         "**$tmpPool** 每個請求獨立的臨時儲存，可以自由修改其中的變數  \n",
     ),
     _prompt: Schema.never().description(
@@ -568,7 +538,7 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.const("ejs").description("EJS 模板"),
             Schema.const("puppeteer").description("html截圖 (速度慢，資源消耗高 需要安裝 puppeteer 插件)"),
             Schema.const("vercelSatori").description(
-              "vercel/satori (速度快，資源消耗低 需要安裝 vercel-satori-png-service 插件)",
+              "vercel/satori (速度快，資源消耗低 需要安裝 to-image-service 插件)",
             ),
           ])
             .default(({ none: "text", url: "text", cmd: "koishiElements" } as SourceTypeValMap<RendererType>)[value])
@@ -868,8 +838,8 @@ export const Config: Schema<Config> = Schema.intersect([
                       .description(
                         "型別  \n" +
                           "字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n" +
-                          "用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
-                          "頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
+                          "用戶型別可使用[GuildMember](https://satori.chat/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
+                          "頻道型別可使用[Channel](https://satori.chat/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
                           "長文字型別會將後續所有內容全部當作一個整體",
                       ),
                     required: Schema.boolean().default(false).description("必填"),
@@ -906,8 +876,8 @@ export const Config: Schema<Config> = Schema.intersect([
                       .description(
                         "型別  \n" +
                           "字串型別可解析出引數中的圖片、語音、影片、檔案的url;啟用自動覆寫後可以自動覆蓋form-data中的檔案  \n" +
-                          "用戶型別可使用[GuildMember](https://satori.js.org/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
-                          "頻道型別可使用[Channel](https://satori.js.org/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
+                          "用戶型別可使用[GuildMember](https://satori.chat/zh-CN/resources/member.html#guildmember)對象的資料,直接使用頂層對象將自動變為 `id:nick`  \n" +
+                          "頻道型別可使用[Channel](https://satori.chat/zh-CN/resources/channel.html#channel)對象的資料,直接使用頂層對象將自動變為 `id:name`  \n" +
                           "長文字型別會將後續所有內容全部當作一個整體",
                       ),
                   }),

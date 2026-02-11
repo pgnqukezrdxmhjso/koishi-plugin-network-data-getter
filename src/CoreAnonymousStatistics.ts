@@ -1,22 +1,17 @@
-import { Context } from "koishi";
+import { BeanHelper } from "koishi-plugin-rzgtboeyndxsklmq-commons";
+
 import { Config } from "./Config";
 import { PluginEventEmitter } from "./index";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
 
 const dataHostUrl: string = "https://data.itzdrli.cc";
 const website: string = "a7f48881-235d-4ddd-821a-029993ef32e9";
 
-export default class CoreAnonymousStatistics implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private pluginEventEmitter: PluginEventEmitter;
+export default class CoreAnonymousStatistics extends BeanHelper.BeanType<Config> {
+  private pluginEventEmitter: PluginEventEmitter = this.beanHelper.getByName("pluginEventEmitter");
   private lastUmami: number = 0;
 
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.pluginEventEmitter = beanHelper.getByName("pluginEventEmitter");
-
+  constructor(beanHelper: BeanHelper<Config>) {
+    super(beanHelper);
     if (!this.config.anonymousStatistics) {
       return;
     }

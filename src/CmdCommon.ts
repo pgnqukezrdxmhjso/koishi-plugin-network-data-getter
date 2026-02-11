@@ -1,16 +1,13 @@
 import crypto from "node:crypto";
-import * as OTPAuth from "otpauth";
-import { Context, h, HTTP } from "koishi";
 
+import { h, HTTP } from "koishi";
+import { Tables } from "@koishijs/cache";
+import { BeanHelper, Strings, Objects } from "koishi-plugin-rzgtboeyndxsklmq-commons";
+import * as OTPAuth from "otpauth";
+
+import { Config, HookFn, HookFnsType } from "./Config";
 import { CmdCtx } from "./CoreCmd";
 import CmdHttp from "./CmdHttp";
-import Objects from "./utils/Objects";
-import { BeanHelper, BeanTypeInterface } from "./utils/BeanHelper";
-import { Config, HookFn, HookFnsType } from "./Config";
-import Strings from "./utils/Strings";
-
-import { Tables } from "@koishijs/cache";
-import Arrays from "./utils/Arrays";
 
 declare module "@koishijs/cache" {
   interface Tables {
@@ -31,20 +28,12 @@ export class BizError extends Error {
   }
 }
 
-export default class CmdCommon implements BeanTypeInterface {
-  private ctx: Context;
-  private config: Config;
-  private cmdHttp: CmdHttp;
+export default class CmdCommon extends BeanHelper.BeanType<Config> {
+  private cmdHttp = this.beanHelper.instance(CmdHttp);
   private cache: Record<string, any> = {};
   private codeRunnerModules: Record<string, any> = null;
 
-  constructor(beanHelper: BeanHelper) {
-    this.ctx = beanHelper.getByName("ctx");
-    this.config = beanHelper.getByName("config");
-    this.cmdHttp = beanHelper.instance(CmdHttp);
-  }
-
-  internalFns: { [key in string]: (...args: any[]) => any } = {
+  internalFns: Record<string, (...args: any[]) => any> = {
     async urlToString(
       cmdCtx: CmdCtx,
       args: {
@@ -245,7 +234,7 @@ export default class CmdCommon implements BeanTypeInterface {
   }
 
   getCmdByElements(prefix: string[], elements: h[]): string {
-    if (Arrays.isEmpty(elements)) {
+    if (!elements?.length) {
       return "";
     }
     elements = this.cutElementsToFirstText(elements);
