@@ -1,13 +1,13 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "Generate commands through configuration. Fetch info from URLs or other commands, process it, and send via various methods.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
     "build": "cd ../../ && yarn build network-data-getter",
     "pub": "cd ../../ && yarn pub network-data-getter",
-    "fastPub": "cd ../../ && yarn bump -3 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
+    "fastPub": "cd ../../ && yarn bump -2 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
     "up": "npx npm-check -u --no-color"
   },
   "files": [
@@ -58,7 +58,7 @@
     "koishi-plugin-cron": "^3.1.0",
     "koishi-plugin-message-topic-service": "^0.0.12",
     "koishi-plugin-puppeteer": "^3.9.0",
-    "koishi-plugin-to-image-service": "^1.6.2",
+    "koishi-plugin-to-image-service": "^1.6.3",
     "koishi-plugin-umami-statistics-service": "^0.0.7",
     "prettier": "^3.7.4",
     "typescript-eslint": "^8.52.1-alpha.3",

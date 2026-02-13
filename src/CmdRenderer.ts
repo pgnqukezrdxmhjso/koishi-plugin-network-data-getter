@@ -1,7 +1,8 @@
 import { render } from "ejs";
 import { h, Random } from "koishi";
-import type { SatoriRenderer } from "koishi-plugin-to-image-service";
 import { BeanHelper, Strings, Objects } from "koishi-plugin-rzgtboeyndxsklmq-commons";
+// noinspection ES6UnusedImports
+import {} from "koishi-plugin-to-image-service";
 import type { ReactElement } from "react";
 
 import type { CmdSource, Config, RendererType } from "./Config";
@@ -134,6 +135,87 @@ export default class CmdRenderer extends BeanHelper.BeanType<Config> {
     return code.replace(/\n+/g, "\n");
   }
 
+  private async reactElementToPng(cmdCtx: CmdCtx, resData: ResData, type: "vercelSatori" | "takumi") {
+    const isSatori = type === "vercelSatori";
+    const config = isSatori ? cmdCtx.source.rendererVercelSatori : cmdCtx.source.rendererTakumi;
+
+    const isElement = h.isElement(resData?.[0]);
+    if (isElement) {
+      resData = await this.handleKoiShiElement(cmdCtx, resData as h[]);
+    }
+
+    let reactElement: ReactElement;
+    if (config.rendererType === "ejs") {
+      reactElement = this.ctx.toImageService.toReactElement.htmlToReactElement(
+        await this.ejs(cmdCtx, resData, config.ejsTemplate),
+      );
+    } else if (config.rendererType === "jsx") {
+      if (isElement) {
+        resData = this.ctx.toImageService.toReactElement.htmlToReactElement(resData + "") as any;
+      }
+      reactElement = await this.ctx.toImageService.toReactElement.jsxToReactElement(
+        config.jsx,
+        this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
+      );
+    }
+
+    reactElement = await this.downloadReactElementImgSrc(cmdCtx, reactElement);
+
+    const options = {
+      width: config.width,
+      height: config.height,
+    };
+
+    if (!options.width) {
+      let width = reactElement.props.style.width;
+      if (width && !(width + "").trim().endsWith("%")) {
+        options.width = typeof width === "number" ? width : parseInt((width + "").replace(/\D/g, ""));
+      } else {
+        width = reactElement.props.width;
+        if (width && !(width + "").trim().endsWith("%")) {
+          options.width = typeof width === "number" ? width : parseInt((width + "").replace(/\D/g, ""));
+        }
+      }
+    }
+    if (!options.height) {
+      let height = reactElement.props.style.height;
+      if (height && !(height + "").trim().endsWith("%")) {
+        options.height = typeof height === "number" ? height : parseInt((height + "").replace(/\D/g, ""));
+      } else {
+        height = reactElement.props.height;
+        if (height && !(height + "").trim().endsWith("%")) {
+          options.height = typeof height === "number" ? height : parseInt((height + "").replace(/\D/g, ""));
+        }
+      }
+    }
+
+    if (isSatori) {
+      const svg = await this.ctx.toImageService.satoriRenderer.render({
+        reactElement,
+        options: {
+          width: options.width,
+          height: options.height,
+          debug: config.debug,
+          emoji: config["emoji"],
+        },
+      });
+      const img = await this.ctx.toImageService.resvgRenderer.render({
+        svg,
+      });
+      return [h.image(img, "image/png")];
+    }
+
+    const img = await this.ctx.toImageService.takumiRenderer.render({
+      reactElement,
+      options: {
+        width: options.width,
+        height: options.height,
+        drawDebugBorder: config.debug,
+      },
+    });
+    return [h.image(img, "image/png")];
+  }
+
   rendererMap: { [key in RendererType]: Renderer } = {
     text: {
       r: async (_, resData: ResData) => {
@@ -240,65 +322,12 @@ export default class CmdRenderer extends BeanHelper.BeanType<Config> {
     },
     vercelSatori: {
       r: async (cmdCtx, resData) => {
-        const config = cmdCtx.source.rendererVercelSatori;
-
-        const isElement = h.isElement(resData?.[0]);
-        if (isElement) {
-          resData = await this.handleKoiShiElement(cmdCtx, resData as h[]);
-        }
-
-        let reactElement: ReactElement;
-        if (config.rendererType === "ejs") {
-          reactElement = this.ctx.toImageService.toReactElement.htmlToReactElement(
-            await this.ejs(cmdCtx, resData, config.ejsTemplate),
-          );
-        } else if (config.rendererType === "jsx") {
-          if (isElement) {
-            resData = this.ctx.toImageService.toReactElement.htmlToReactElement(resData + "") as any;
-          }
-          reactElement = await this.ctx.toImageService.toReactElement.jsxToReactElement(
-            config.jsx,
-            this.cmdCommon.buildCodeRunnerArgs(cmdCtx, { data: resData }),
-          );
-        }
-
-        reactElement = await this.downloadReactElementImgSrc(cmdCtx, reactElement);
-
-        const options: SatoriRenderer.VercelSatoriOptions = {
-          width: config.width,
-          height: config.height,
-          emoji: config.emoji,
-          debug: config.debug,
-        };
-
-        if (!options.width) {
-          let width = reactElement.props.style.width;
-          if (width && !(width + "").trim().endsWith("%")) {
-            options.width = typeof width === "number" ? width : parseInt((width + "").replace(/\D/g, ""));
-          } else {
-            width = reactElement.props.width;
-            if (width && !(width + "").trim().endsWith("%")) {
-              options.width = typeof width === "number" ? width : parseInt((width + "").replace(/\D/g, ""));
-            }
-          }
-        }
-        if (!options.height) {
-          let height = reactElement.props.style.height;
-          if (height && !(height + "").trim().endsWith("%")) {
-            options.height = typeof height === "number" ? height : parseInt((height + "").replace(/\D/g, ""));
-          } else {
-            height = reactElement.props.height;
-            if (height && !(height + "").trim().endsWith("%")) {
-              options.height = typeof height === "number" ? height : parseInt((height + "").replace(/\D/g, ""));
-            }
-          }
-        }
-
-        const svg = await this.ctx.toImageService.satoriRenderer.render({ reactElement, options });
-        const img = await this.ctx.toImageService.resvgRenderer.render({
-          svg,
-        });
-        return [h.image(img, "image/png")];
+        return this.reactElementToPng(cmdCtx, resData, "vercelSatori");
+      },
+    },
+    takumi: {
+      r: async (cmdCtx, resData) => {
+        return this.reactElementToPng(cmdCtx, resData, "takumi");
       },
     },
   };

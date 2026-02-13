@@ -72,15 +72,23 @@ export interface RendererPuppeteer {
   screenshotOmitBackground: boolean;
 }
 
-export type RendererVercelSatoriRendererType = "ejs" | "jsx";
+export type RendererReactElementRendererType = "ejs" | "jsx";
 export type RendererVercelSatoriEmoji = "twemoji" | "blobmoji" | "noto" | "openmoji" | "fluent" | "fluentFlat";
 export interface RendererVercelSatori {
-  rendererType: RendererVercelSatoriRendererType;
+  rendererType: RendererReactElementRendererType;
   ejsTemplate?: string;
   jsx?: string;
   width: number;
   height: number;
   emoji: RendererVercelSatoriEmoji;
+  debug: boolean;
+}
+export interface RendererTakumi {
+  rendererType: RendererReactElementRendererType;
+  ejsTemplate?: string;
+  jsx?: string;
+  width: number;
+  height: number;
   debug: boolean;
 }
 
@@ -107,7 +115,8 @@ export type RendererType =
   | "ejs"
   | "cmdLink"
   | "puppeteer"
-  | "vercelSatori";
+  | "vercelSatori"
+  | "takumi";
 export interface CmdSource {
   command: string;
   alias: string[];
@@ -136,6 +145,7 @@ export interface CmdSource {
   cmdLink?: string;
   rendererPuppeteer?: RendererPuppeteer;
   rendererVercelSatori?: RendererVercelSatori;
+  rendererTakumi?: RendererTakumi;
 
   msgSendMode: MsgSendMode;
   msgTopic?: string;
@@ -540,6 +550,7 @@ export const Config: Schema<Config> = Schema.intersect([
             Schema.const("vercelSatori").description(
               "vercel/satori (速度快，資源消耗低 需要安裝 to-image-service 插件)",
             ),
+            Schema.const("takumi").description("takumi (速度快，資源消耗低 需要安裝 to-image-service 插件)"),
           ])
             .default(({ none: "text", url: "text", cmd: "koishiElements" } as SourceTypeValMap<RendererType>)[value])
             .description("渲染型別"),
@@ -560,6 +571,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 "ejs",
                 "puppeteer",
                 "vercelSatori",
+                "takumi",
               ],
             },
           ],
@@ -572,7 +584,7 @@ export const Config: Schema<Config> = Schema.intersect([
             }
             return {
               pickOneRandomly: Schema.boolean()
-                .default(!["koishiElements", "ejs", "puppeteer", "vercelSatori"].includes(sendType))
+                .default(!["koishiElements", "ejs", "puppeteer", "vercelSatori", "takumi"].includes(sendType))
                 .description("從多行結果中隨機選擇一條。 複雜資料將會被展平後隨機選擇一條"),
             };
           },
@@ -580,7 +592,7 @@ export const Config: Schema<Config> = Schema.intersect([
         orGenerator(
           [
             { key: "sourceType", values: ["none", "#url", "cmd"] },
-            { key: "sendType", values: ["ejs", "cmdLink", "puppeteer", "vercelSatori"] },
+            { key: "sendType", values: ["ejs", "cmdLink", "puppeteer", "vercelSatori", "takumi"] },
           ],
           ([sourceType, sendType]) => {
             return {
@@ -589,7 +601,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   .role("textarea", { rows: [3, 99] })
                   .default(when(sourceType === "cmd", "<%-$data%>", "<%=$data%>"))
                   .description(
-                    "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
+                    "[EJS 模板](https://github.com/mde/ejs/tree/main?tab=readme-ov-file#features)  \n" +
                       "此處使用的是[koishi標準元素](https://koishi.chat/zh-CN/api/message/elements.html)  \n" +
                       "可使用 **_prompt2** 描述的內容  \n" +
                       "#可額外使用  \n" +
@@ -634,7 +646,7 @@ export const Config: Schema<Config> = Schema.intersect([
                         .role("textarea", { rows: [3, 99] })
                         .default(when(sourceType === "cmd", "<%-$data%>", "<%=$data%>"))
                         .description(
-                          "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
+                          "[EJS 模板](https://github.com/mde/ejs/tree/main?tab=readme-ov-file#features)  \n" +
                             "可使用 **_prompt2** 描述的內容  \n" +
                             "#可額外使用  \n" +
                             "**$data** 響應資料處理器返回的值",
@@ -718,7 +730,7 @@ export const Config: Schema<Config> = Schema.intersect([
                           `<div style="display: flex; flex-direction: column;">${when(sourceType === "cmd", "<%-$data%>", "<%=JSON.stringify($data)%>")}</div>`,
                         )
                         .description(
-                          "[EJS 模板](https://github.com/mde/ejs/blob/main/docs/syntax.md)  \n" +
+                          "[EJS 模板](https://github.com/mde/ejs/tree/main?tab=readme-ov-file#features)  \n" +
                             "可使用 **_prompt2** 描述的內容  \n" +
                             "#可額外使用  \n" +
                             "**$data** 響應資料處理器返回的值",
@@ -739,6 +751,58 @@ export const Config: Schema<Config> = Schema.intersect([
                     ])
                       .default("twemoji")
                       .description("表情符號風格"),
+                    debug: Schema.boolean().default(false).description("顯示影象上的除錯資訊"),
+                  }),
+                ]),
+              },
+              takumi: {
+                sendType: Schema.const("takumi").required(),
+                rendererTakumi: Schema.intersect([
+                  Schema.object({
+                    rendererType: Schema.union([
+                      Schema.const("jsx").description("jsx"),
+                      Schema.const("ejs").description("EJS 模板"),
+                    ])
+                      .default("jsx")
+                      .description("渲染型別"),
+                    _explain: Schema.never().description(
+                      "takumi 支援有限的 HTML 和 CSS [檢視詳情](https://takumi.kane.tw/docs/reference/)",
+                    ),
+                  }),
+                  Schema.union([
+                    Schema.object({
+                      rendererType: Schema.const("jsx"),
+                      jsx: Schema.string()
+                        .role("textarea", { rows: [3, 99] })
+                        .default(
+                          `<div style={{display: 'flex', flexDirection: 'column'}}>${when(sourceType === "cmd", "{$data}", "{JSON.stringify($data)}")}</div>`,
+                        )
+                        .description(
+                          "[takumi JSX](https://takumi.kane.tw/docs/reference/)  \n" +
+                            "可使用 **_prompt** 描述的內容  \n" +
+                            "#可額外使用  \n" +
+                            "**$data** 響應資料處理器返回的值",
+                        ),
+                    }),
+                    Schema.object({
+                      rendererType: Schema.const("ejs").required(),
+                      ejsTemplate: Schema.string()
+                        .role("textarea", { rows: [3, 99] })
+                        .default(
+                          `<div style="display: flex; flex-direction: column;">${when(sourceType === "cmd", "<%-$data%>", "<%=JSON.stringify($data)%>")}</div>`,
+                        )
+                        .description(
+                          "[EJS 模板](https://github.com/mde/ejs/tree/main?tab=readme-ov-file#features)  \n" +
+                            "可使用 **_prompt2** 描述的內容  \n" +
+                            "#可額外使用  \n" +
+                            "**$data** 響應資料處理器返回的值",
+                        ),
+                    }),
+                    Schema.object({}),
+                  ]),
+                  Schema.object({
+                    width: Schema.number(),
+                    height: Schema.number(),
                     debug: Schema.boolean().default(false).description("顯示影象上的除錯資訊"),
                   }),
                 ]),
