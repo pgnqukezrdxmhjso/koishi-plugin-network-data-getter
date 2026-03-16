@@ -8,11 +8,14 @@
 
 目前支援的資料解析型別:
 
-- JSON
-- 多行文字
+- JSON 固定字串
+- JSON 選擇器
+- JSON 原文
+- 文字
+- HTML CSS選擇器
 - 資源 (圖片/影片/音訊等)
-- HTML
-- JSONRaw
+- koishi標準元素
+- 自定義函式
 
 目前支援的渲染型別:
 
@@ -21,7 +24,12 @@
 - 音訊
 - 影片
 - 檔案
-- EJS模板
+- 指令鏈
+- koishi標準元素
+- EJS 模板
+- html截圖(puppeteer)
+- html截圖(vercel/satori)
+- html截圖(takumi)
 
 目前支援透過指令傳遞引數:
 
@@ -257,6 +265,10 @@ ejsTemplate: |-
 - 國際化
 - 指令引數支援變長引數
 - 渲染型別增加模擬koishi服務
+
+### 1.1.1
+
+- 修復一個bug
 
 ### 1.1.0
 

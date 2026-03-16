@@ -78,8 +78,8 @@ export default class CmdCommon extends BeanHelper.BeanType<Config> {
       this.codeRunnerModules = {
         crypto,
         OTPAuth,
-        http: BeanHelper.buildLazyProxy(() => this.ctx.http),
-        cache: BeanHelper.buildLazyProxy(() => this.ctx.cache),
+        http: BeanHelper.buildLazyProxy(() => this.ctx.http, { bindOriginal: true }),
+        cache: BeanHelper.buildLazyProxy(() => this.ctx.cache, { bindOriginal: true }),
         logger: this.ctx.logger,
       };
     }

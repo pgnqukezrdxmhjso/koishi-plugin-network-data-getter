@@ -1,13 +1,13 @@
 {
   "name": "koishi-plugin-network-data-getter",
   "description": "Generate commands through configuration. Fetch info from URLs or other commands, process it, and send via various methods.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "scripts": {
     "build": "cd ../../ && yarn build network-data-getter",
     "pub": "cd ../../ && yarn pub network-data-getter",
-    "fastPub": "cd ../../ && yarn bump -2 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
+    "fastPub": "cd ../../ && yarn bump -3 network-data-getter && yarn build network-data-getter && yarn pub network-data-getter",
     "up": "npx npm-check -u --no-color"
   },
   "files": [
